@@ -1,0 +1,102 @@
+<%- include('partials/header', { title: course.title }) %>
+<section class="course-detail">
+  <h1><%= course.title %></h1>
+  <p><%= course.description %></p>
+
+  <% if (course.video_url) { %>
+    <div class="course-video">
+      <% if (course.video_url.includes('youtube.com') || course.video_url.includes('youtu.be')) { %>
+        <% const videoIdMatch = course.video_url.match(/(youtu\.be\/|v=)([A-Za-z0-9_-]+)/); %>
+        <% const videoId = videoIdMatch ? videoIdMatch[2] : null; %>
+        <% if (videoId) { %>
+          <iframe width="100%" height="420" src="https://www.youtube.com/embed/<%= videoId %>" frameborder="0" allowfullscreen></iframe>
+        <% } else { %>
+          <p><a href="<%= course.video_url %>" target="_blank">Ver video</a></p>
+        <% } %>
+      <% } else { %>
+        <video controls width="100%">
+          <source src="<%= course.video_url %>" />
+          Tu navegador no soporta video HTML5.
+        </video>
+      <% } %>
+    </div>
+  <% } %>
+
+  <div class="course-content">
+    <h2>Contenido del curso</h2>
+    <p><%= course.content %></p>
+    <% if (course.passing_score) { %>
+      <p><strong>Puntaje mínimo para completar:</strong> <%= course.passing_score %> puntos</p>
+    <% } %>
+  </div>
+
+  <% const isCourseCompleted = enrolled && Number(enrolled.completed) === 1; %>
+  <% if (!enrolled) { %>
+    <form action="/courses/<%= course.id %>/enroll" method="POST">
+      <button class="button" type="submit">Inscribirme</button>
+    </form>
+  <% } else if (!isCourseCompleted) { %>
+    <% if (typeof questions !== 'undefined' && questions.length > 0) { %>
+      <% if (typeof quizError !== 'undefined' && quizError) { %>
+        <div class="alert"><%= quizError %></div>
+      <% } %>
+      <% if (typeof scoreMessage !== 'undefined' && scoreMessage) { %>
+        <div class="alert"><%= scoreMessage %></div>
+      <% } else { %>
+        <div class="alert">Puedes intentarlo tantas veces como necesites para alcanzar el puntaje mínimo.</div>
+      <% } %>
+      <h2>Preguntas del curso</h2>
+      <form action="/courses/<%= course.id %>/submit" method="POST">
+        <% questions.forEach((question, index) => { %>
+          <% const result = questionResults && questionResults[question.id]; %>
+          <div class="quiz-question <%= result === 'correct' ? 'question-correct' : result === 'incorrect' ? 'question-incorrect' : '' %>">
+            <p><strong><%= index + 1 %>. <%= question.question_text %></strong></p>
+            <% if (question.question_type === 'short-answer') { %>
+              <input class="text-answer <%= result === 'correct' ? 'answer-correct' : result === 'incorrect' ? 'answer-incorrect' : '' %>" type="text" name="answers_<%= question.id %>" value="<%= selectedAnswers && selectedAnswers[question.id] ? selectedAnswers[question.id] : '' %>" placeholder="Escribe tu respuesta" required />
+              <% if (result === 'incorrect' && question.correct_text) { %>
+                <p class="correct-answer">Respuesta correcta: <%= question.correct_text %></p>
+              <% } %>
+            <% } else { %>
+              <% question.options.forEach(option => { %>
+                <% const isSelected = selectedAnswers && selectedAnswers[question.id] == option.id; %>
+                <% const isCorrectOption = question.correctOptionId === option.id; %>
+                <label class="quiz-option <%= isSelected && result === 'incorrect' ? 'incorrect' : '' %> <%= isCorrectOption ? 'correct' : '' %>">
+                  <input type="radio" name="answers_<%= question.id %>" value="<%= option.id %>" <%= selectedAnswers && selectedAnswers[question.id] == option.id ? 'checked' : '' %> />
+                  <span><%= option.text %></span>
+                </label>
+              <% }) %>
+            <% } %>
+          </div>
+        <% }) %>
+        <button class="button button-secondary" type="submit">Enviar respuestas</button>
+      </form>
+    <% } else { %>
+      <div class="alert">Este curso aún no tiene preguntas cargadas. El administrador debe agregar preguntas para que puedas responderlo.</div>
+    <% } %>
+  <% } else { %>
+    <p>Curso completado. <a class="button" href="/certificate/<%= course.id %>">Ver certificado</a></p>
+    <% if (typeof quizSuccess !== 'undefined' && quizSuccess) { %>
+      <div class="modal-overlay" id="completionModal">
+        <div class="modal-card">
+          <h2>¡Curso finalizado!</h2>
+          <p><%= quizSuccess %></p>
+          <a class="button" href="<%= certificateUrl %>">Descargar certificado</a>
+          <button type="button" class="button button-secondary" onclick="closeCompletionModal()">Cerrar</button>
+        </div>
+      </div>
+    <% } %>
+  <% } %>
+</section>
+<script>
+  function closeCompletionModal() {
+    const modal = document.getElementById('completionModal');
+    if (modal) modal.style.display = 'none';
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('completionModal');
+    if (modal) {
+      modal.style.display = 'flex';
+    }
+  });
+</script>
+<%- include('partials/footer') %>

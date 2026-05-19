@@ -1,0 +1,373 @@
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f4f6f8;
+  color: #222;
+}
+
+.container {
+  width: min(1100px, 94%);
+  margin: 0 auto;
+}
+
+.site-header {
+  background: #0a4f78;
+  color: white;
+  padding: 1rem 0;
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  color: white;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.nav-links a {
+  color: white;
+  text-decoration: none;
+  margin-left: 1rem;
+}
+
+.hero {
+  background: #e8f4fb;
+  padding: 2.5rem 1rem;
+  margin: 1.5rem 0;
+  border-radius: 14px;
+}
+
+.hero h1 {
+  margin: 0 0 0.5rem;
+}
+
+.courses-grid,
+.dashboard-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.course-card,
+.form-card,
+.certificate-card,
+.course-detail {
+  background: white;
+  border-radius: 14px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+}
+
+.course-card.small {
+  padding: 1rem;
+}
+
+.course-card h2,
+.course-card h3,
+.course-detail h1,
+.certificate-card h1 {
+  margin-top: 0;
+}
+
+.course-video {
+  margin: 1.5rem 0;
+}
+
+.quiz-question {
+  border: 1px solid #e1ecf7;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  background: #f8fbff;
+}
+
+.quiz-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.quiz-option.correct {
+  background: #d4f5d7;
+  border: 1px solid #6bc56d;
+}
+
+.quiz-option.incorrect {
+  background: #fde5e5;
+  border: 1px solid #e06464;
+}
+
+.question-correct {
+  border-color: #6bc56d;
+}
+
+.question-incorrect {
+  border-color: #e06464;
+}
+
+.answer-correct {
+  border-color: #6bc56d;
+  background: #eaf9ec;
+}
+
+.answer-incorrect {
+  border-color: #e06464;
+  background: #fde5e5;
+}
+
+.correct-answer {
+  margin-top: 0.75rem;
+  color: #3a7d3d;
+  font-weight: 600;
+}
+
+.question-block {
+  border: 1px solid #d6dbe3;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  background: #ffffff;
+}
+
+.question-block h3 {
+  margin-top: 0;
+}
+
+.question-extra {
+  margin-top: 1rem;
+}
+
+.question-type {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid #cfd8e0;
+  border-radius: 10px;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+.button,
+.button-secondary {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.8rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+}
+
+.button {
+  background: #0a4f78;
+}
+
+.button-secondary {
+  background: #4a90e2;
+}
+
+.form-card label {
+  display: block;
+  margin-top: 1rem;
+  font-weight: 600;
+}
+
+.form-card input,
+.form-card textarea {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid #cfd8e0;
+  border-radius: 10px;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+.alert {
+  background: #ffe9d7;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid #ff8c42;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.footer {
+  text-align: center;
+  padding: 1rem 0;
+  color: #555;
+}
+
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1.3fr 0.9fr;
+  }
+  .courses-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .site-header .container {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+}
+
+.text-answer {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid #cfd8e0;
+  border-radius: 10px;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+.certificate-page {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.certificate-card {
+  max-width: 900px;
+  width: 100%;
+  padding: 2rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 12px solid #4a90e2;
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+}
+
+.certificate-diptych {
+  text-align: center;
+}
+
+.certificate-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #0a4f78;
+  letter-spacing: 0.2em;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: white;
+  border-radius: 18px;
+  padding: 2rem;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
+}
+
+.modal-card h2 {
+  margin-top: 0;
+}
+
+.modal-card p {
+  margin: 1rem 0 1.5rem;
+  color: #333;
+}
+
+.modal-card .button,
+.modal-card .button-secondary {
+  margin: 0.5rem 0.5rem 0 0.5rem;
+}
+
+  margin-bottom: 1rem;
+}
+
+.certificate-subtitle {
+  font-size: 1rem;
+  margin-bottom: 1.25rem;
+  color: #4a4a4a;
+}
+
+.certificate-name {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #2a2a2a;
+  margin: 0.75rem 0;
+}
+
+.certificate-description {
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  color: #4a4a4a;
+}
+
+.certificate-course {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 1rem 0;
+  color: #0a4f78;
+}
+
+.certificate-note {
+  margin: 1rem auto 2rem;
+  font-size: 0.95rem;
+  color: #555;
+  max-width: 720px;
+  line-height: 1.5;
+}
+
+.certificate-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.signature-line {
+  height: 1px;
+  background: #222;
+  margin-bottom: 0.5rem;
+}
+
+.signature-label {
+  font-size: 0.9rem;
+  color: #222;
+}
+
+.certificate-date {
+  margin-top: 1.5rem;
+  font-size: 0.95rem;
+  color: #4a4a4a;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+  .site-header,
+  .footer,
+  .button {
+    display: none !important;
+  }
+  .certificate-card {
+    border: 2px solid #000;
+    box-shadow: none;
+    width: 100%;
+  }
+}

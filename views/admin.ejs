@@ -1,0 +1,148 @@
+<%- include('partials/header', { title: 'Administrador' }) %>
+<section>
+  <h1>Panel de administración</h1>
+  <p>Crea cursos nuevos para que los scouts puedan inscribirse y completar.</p>
+  <p><a href="/admin/users">Administrar Usuarios</a></p>
+</section>
+
+<section class="form-card">
+  <h2>Crear nuevo curso</h2>
+  <form action="/admin/create" method="POST">
+    <label>Título</label>
+    <input name="title" type="text" required />
+    <label>Descripción</label>
+    <textarea name="description" rows="3" required></textarea>
+    <label>Contenido</label>
+    <textarea name="content" rows="6" required></textarea>
+    <label>URL de video</label>
+    <input name="video_url" type="url" placeholder="https://youtube.com/..." />
+
+    <label>Puntaje mínimo para completar</label>
+    <input name="passing_score" type="number" min="1" value="1" required />
+
+    <div id="questions-container">
+      <div class="question-block" data-index="0">
+        <h3>Pregunta 1</h3>
+        <label>Texto de la pregunta</label>
+        <input name="questions[0][text]" type="text" required />
+
+        <label>Tipo de pregunta</label>
+        <select name="questions[0][type]" class="question-type">
+          <option value="multiple-choice">Selección múltiple</option>
+          <option value="true-false">Verdadero/Falso</option>
+          <option value="short-answer">Respuesta corta</option>
+        </select>
+
+        <div class="question-extra"></div>
+      </div>
+    </div>
+
+    <button type="button" id="add-question" class="button button-secondary">Agregar otra pregunta</button>
+    <button type="submit">Crear curso</button>
+  </form>
+</section>
+<script>
+  const questionsContainer = document.getElementById('questions-container');
+  const addQuestionButton = document.getElementById('add-question');
+  let questionCount = 1;
+
+  function renderQuestionFields(block, index, type = 'multiple-choice') {
+    const extra = block.querySelector('.question-extra');
+    if (!extra) return;
+    if (type === 'short-answer') {
+      extra.innerHTML = `
+        <label>Respuesta correcta</label>
+        <input name="questions[${index}][answer]" type="text" required />
+      `;
+      return;
+    }
+
+    if (type === 'true-false') {
+      extra.innerHTML = `
+        <label>Respuesta correcta</label>
+        <select name="questions[${index}][correct]">
+          <option value="0">Verdadero</option>
+          <option value="1">Falso</option>
+        </select>
+      `;
+      return;
+    }
+
+    extra.innerHTML = `
+      <label>Opciones</label>
+      <input name="questions[${index}][options][0]" type="text" placeholder="Opción 1" required />
+      <input name="questions[${index}][options][1]" type="text" placeholder="Opción 2" required />
+      <input name="questions[${index}][options][2]" type="text" placeholder="Opción 3" required />
+      <input name="questions[${index}][options][3]" type="text" placeholder="Opción 4" required />
+      <label>Índice de la respuesta correcta</label>
+      <select name="questions[${index}][correct]">
+        <option value="0">Opción 1</option>
+        <option value="1">Opción 2</option>
+        <option value="2">Opción 3</option>
+        <option value="3">Opción 4</option>
+      </select>
+    `;
+  }
+
+  function initializeQuestionBlock(block) {
+    const index = block.dataset.index;
+    const typeSelect = block.querySelector('.question-type');
+    renderQuestionFields(block, index, typeSelect.value);
+    typeSelect.addEventListener('change', () => {
+      renderQuestionFields(block, index, typeSelect.value);
+    });
+  }
+
+  questionsContainer.querySelectorAll('.question-block').forEach(block => {
+    initializeQuestionBlock(block);
+  });
+
+  addQuestionButton.addEventListener('click', () => {
+    const index = questionCount;
+    const block = document.createElement('div');
+    block.className = 'question-block';
+    block.dataset.index = String(index);
+    block.innerHTML = `
+      <h3>Pregunta ${index + 1}</h3>
+      <label>Texto de la pregunta</label>
+      <input name="questions[${index}][text]" type="text" required />
+      <label>Tipo de pregunta</label>
+      <select name="questions[${index}][type]" class="question-type">
+        <option value="multiple-choice">Selección múltiple</option>
+        <option value="true-false">Verdadero/Falso</option>
+        <option value="short-answer">Respuesta corta</option>
+      </select>
+      <div class="question-extra"></div>
+      <button type="button" class="button button-secondary remove-question">Eliminar pregunta</button>
+    `;
+    questionsContainer.appendChild(block);
+    initializeQuestionBlock(block);
+    questionCount += 1;
+  });
+
+  questionsContainer.addEventListener('click', event => {
+    if (event.target && event.target.classList.contains('remove-question')) {
+      const block = event.target.closest('.question-block');
+      if (block) {
+        block.remove();
+      }
+    }
+  });
+</script>
+
+<section class="courses-grid">
+  <h2>Cursos publicados</h2>
+  <% if (courses.length === 0) { %>
+    <p>No hay cursos creados aún.</p>
+  <% } %>
+  <% courses.forEach(course => { %>
+    <article class="course-card">
+      <h3><a href="/courses/<%= course.id %>"><%= course.title %></a></h3>
+      <p><%= course.description %></p>
+      <form action="/admin/courses/<%= course.id %>/delete" method="POST" style="display:inline;">
+        <button type="submit" onclick="return confirm('¿Estás seguro de eliminar este curso?')">Eliminar curso</button>
+      </form>
+    </article>
+  <% }) %>
+</section>
+<%- include('partials/footer') %>

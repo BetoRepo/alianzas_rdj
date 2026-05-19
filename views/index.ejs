@@ -1,0 +1,21 @@
+<%- include('partials/header', { title: 'Inicio' }) %>
+
+<section class="hero">
+  <h1>Bienvenidos a la Aula Virtual de la Asociación Scout de Venezuela</h1>
+  <p>Accede a cursos, completa tus estudios y descarga tu certificado.</p>
+</section>
+
+<section class="courses-grid">
+  <% if (courses.length === 0) { %>
+    <p>No hay cursos publicados todavía. Un administrador puede crear el primero.</p>
+  <% } %>
+  <% courses.forEach(course => { %>
+    <article class="course-card">
+      <h2><a href="/courses/<%= course.id %>"><%= course.title %></a></h2>
+      <p><%= course.description %></p>
+      <a class="button" href="/courses/<%= course.id %>">Ver curso</a>
+    </article>
+  <% }) %>
+</section>
+
+<%- include('partials/footer') %>

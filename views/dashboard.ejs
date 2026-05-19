@@ -1,0 +1,35 @@
+<%- include('partials/header', { title: 'Mi panel' }) %>
+<section>
+  <h1>Bienvenido, <%= user.name %></h1>
+  <p>Elige un curso para inscribirte o continúa con los cursos ya iniciados.</p>
+</section>
+
+<section class="dashboard-grid">
+  <div>
+    <h2>Cursos disponibles</h2>
+    <% if (courses.length === 0) { %>
+      <p>No hay cursos disponibles.</p>
+    <% } %>
+    <% courses.forEach(course => { %>
+      <article class="course-card small">
+        <h3><a href="/courses/<%= course.id %>"><%= course.title %></a></h3>
+        <p><%= course.description %></p>
+      </article>
+    <% }) %>
+  </div>
+
+  <div>
+    <h2>Mis cursos</h2>
+    <% if (enrolled.length === 0) { %>
+      <p>No estás inscrito en ningún curso aún.</p>
+    <% } %>
+    <% enrolled.forEach(item => { %>
+      <article class="course-card small">
+        <h3><a href="/courses/<%= item.course_id %>"><%= item.title %></a></h3>
+        <p>Estado: <strong><%= item.completed ? 'Completado' : 'Inscrito' %></strong></p>
+      </article>
+    <% }) %>
+  </div>
+</section>
+
+<%- include('partials/footer') %>
