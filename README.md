@@ -23,4 +23,4 @@ Aplicación web simple para una aula virtual con inicio de sesión, cursos, fina
 - Finalización de cursos.
 - Certificado con nombre y fecha.
 
-> Nota: cambia la contraseña del administrador después de la primera conexión.
+
