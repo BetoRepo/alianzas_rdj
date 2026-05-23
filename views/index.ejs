@@ -1,19 +1,35 @@
-<%- include('partials/header', { title: 'Inicio' }) %>
+<%- include('partials/header', { title: 'Cursos' }) %>
 
 <section class="hero">
-  <h1>Bienvenidos a la Aula Virtual de la Asociación Scout de Venezuela</h1>
-  <p>Accede a cursos, completa tus estudios y descarga tu certificado.</p>
+  <h1>Explora los cursos oficiales de la Asociación Scout de Venezuela</h1>
+  <p>Avanza por secciones diseñadas para que cada curso sea claro, seguro y progresivo. Completa tus módulos y obtén certificación sin complicaciones.</p>
+  <div class="hero-actions">
+    <a class="button" href="/login">Entrar a mi panel</a>
+  </div>
+</section>
+
+<section class="stats-grid">
+  <article class="metric-card">
+    <h3>Cursos disponibles</h3>
+    <div class="metric-value"><%= courses.length %></div>
+    <p>Encuentra contenido actualizado para tu formación scout.</p>
+  </article>
 </section>
 
 <section class="courses-grid">
   <% if (courses.length === 0) { %>
-    <p>No hay cursos publicados todavía. Un administrador puede crear el primero.</p>
+    <article class="course-card">
+      <p>No hay cursos publicados todavía. Un administrador puede crear el primero.</p>
+    </article>
   <% } %>
   <% courses.forEach(course => { %>
     <article class="course-card">
       <h2><a href="/courses/<%= course.id %>"><%= course.title %></a></h2>
       <p><%= course.description %></p>
-      <a class="button" href="/courses/<%= course.id %>">Ver curso</a>
+      <div class="course-progress">
+        <small>Más información disponible en el curso</small>
+        <a class="button-secondary" href="/courses/<%= course.id %>">Ver curso</a>
+      </div>
     </article>
   <% }) %>
 </section>

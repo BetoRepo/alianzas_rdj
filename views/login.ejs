@@ -1,13 +1,20 @@
 <%- include('partials/header', { title: 'Iniciar sesión' }) %>
-<section class="form-card">
-  <h1>Iniciar sesión</h1>
-  <form action="/login" method="POST">
-    <label>Correo electrónico</label>
-    <input name="email" type="email" required />
-    <label>Contraseña</label>
-    <input name="password" type="password" required />
-    <button type="submit">Entrar</button>
-  </form>
-  <p>¿No tienes cuenta? <a href="/register">Regístrate</a></p>
+<section class="auth-page">
+  <div class="auth-aside">
+    <h1>Aula Virtual Scout</h1>
+    <p>Accede a los cursos institucionales de la Asociación Scout de Venezuela y completa tus módulos en un espacio seguro y moderno.</p>
+  </div>
+
+  <div class="auth-panel form-card">
+    <h1>Iniciar sesión</h1>
+    <form action="/login" method="POST">
+      <label>Correo electrónico</label>
+      <input name="email" type="email" required placeholder="tu@email.com" />
+      <label>Contraseña</label>
+      <input name="password" type="password" required placeholder="••••••••" />
+      <button type="submit" class="button">Entrar</button>
+    </form>
+    <p>¿No tienes cuenta? <a href="/register">Regístrate</a></p>
+  </div>
 </section>
 <%- include('partials/footer') %>

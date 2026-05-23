@@ -1,54 +1,155 @@
 <%- include('partials/header', { title: 'Administrador' }) %>
-<section>
-  <h1>Panel de administración</h1>
-  <p>Crea cursos nuevos para que los scouts puedan inscribirse y completar.</p>
-  <p><a href="/admin/users">Administrar Usuarios</a></p>
+<section class="page-header">
+  <div>
+    <h1>Panel de administración</h1>
+    <p>Gestiona usuarios, cursos y métricas desde una interfaz más clara y moderna.</p>
+  </div>
+  <div class="page-actions">
+    <a href="/admin/users" class="button-secondary">Administrar usuarios</a>
+  </div>
 </section>
 
-<section class="form-card">
-  <h2>Crear nuevo curso</h2>
-  <form action="/admin/create" method="POST">
-    <label>Título</label>
-    <input name="title" type="text" required />
-    <label>Descripción</label>
-    <textarea name="description" rows="3" required></textarea>
-    <label>Contenido</label>
-    <textarea name="content" rows="6" required></textarea>
-    <label>URL de video</label>
-    <input name="video_url" type="url" placeholder="https://youtube.com/..." />
+<section class="stats-grid">
+  <article class="metric-card">
+    <h3>Usuarios registrados</h3>
+    <div class="metric-value"><%= userCount || 0 %></div>
+    <p>Total de cuentas en la plataforma.</p>
+  </article>
+  <article class="metric-card">
+    <h3>Cursos publicados</h3>
+    <div class="metric-value"><%= courseCount || 0 %></div>
+    <p>Cursos disponibles para inscripción.</p>
+  </article>
+  <article class="metric-card">
+    <h3>Completaciones</h3>
+    <div class="metric-value"><%= completedEnrollments || 0 %></div>
+    <p>Cursos finalizados por los estudiantes.</p>
+  </article>
+  <article class="metric-card">
+    <h3>Tasa de completitud</h3>
+    <div class="metric-value"><%= completionRate || 0 %>%</div>
+    <p>Porcentaje de avance total entre inscritos.</p>
+  </article>
+</section>
 
-    <label>Puntaje mínimo para completar</label>
-    <input name="passing_score" type="number" min="1" value="1" required />
+<section class="admin-grid">
+  <div class="admin-panel">
+    <div class="panel-card">
+      <h2>Crear nuevo curso</h2>
+      <p>Define un curso con secciones y preguntas por sección para avanzar paso a paso.</p>
+      <form action="/admin/create" method="POST">
+        <div class="field-group">
+          <label>Título</label>
+          <input name="title" type="text" required />
+        </div>
+        <div class="field-group">
+          <label>Descripción</label>
+          <textarea name="description" rows="3" required></textarea>
+        </div>
+        <div class="field-group">
+          <label>Contenido general</label>
+          <textarea name="content" rows="4" required></textarea>
+        </div>
+        <div class="field-group">
+          <label>URL de video</label>
+          <input name="video_url" type="url" placeholder="https://youtube.com/..." />
+        </div>
+        <div class="field-group">
+          <label>Puntaje mínimo para completar</label>
+          <input name="passing_score" type="number" min="1" value="1" required />
+        </div>
 
-    <div id="questions-container">
-      <div class="question-block" data-index="0">
-        <h3>Pregunta 1</h3>
-        <label>Texto de la pregunta</label>
-        <input name="questions[0][text]" type="text" required />
+        <div id="sections-container">
+          <div class="section-block" data-index="0">
+            <h3>Sección 1</h3>
+            <div class="field-group">
+              <label>Título de la sección</label>
+              <input name="sections[0][title]" type="text" required />
+            </div>
+            <div class="field-group">
+              <label>Descripción de la sección</label>
+              <textarea name="sections[0][content]" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="add-section" class="button-secondary">Agregar sección</button>
+        </div>
 
-        <label>Tipo de pregunta</label>
-        <select name="questions[0][type]" class="question-type">
-          <option value="multiple-choice">Selección múltiple</option>
-          <option value="true-false">Verdadero/Falso</option>
-          <option value="short-answer">Respuesta corta</option>
-        </select>
+        <div id="questions-container">
+          <div class="question-block" data-index="0">
+            <h3>Pregunta 1</h3>
+            <div class="field-group">
+              <label>Texto de la pregunta</label>
+              <input name="questions[0][text]" type="text" required />
+            </div>
+            <div class="field-group">
+              <label>Sección</label>
+              <select name="questions[0][section]" class="question-section"></select>
+            </div>
+            <div class="field-group">
+              <label>Tipo de pregunta</label>
+              <select name="questions[0][type]" class="question-type">
+                <option value="multiple-choice">Selección múltiple</option>
+                <option value="true-false">Verdadero/Falso</option>
+                <option value="short-answer">Respuesta corta</option>
+              </select>
+            </div>
+            <div class="question-extra"></div>
+          </div>
+        </div>
 
-        <div class="question-extra"></div>
-      </div>
+        <div class="form-actions">
+          <button type="button" id="add-question" class="button-secondary">Agregar otra pregunta</button>
+          <button type="submit" class="button">Crear curso</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <button type="button" id="add-question" class="button button-secondary">Agregar otra pregunta</button>
-    <button type="submit">Crear curso</button>
-  </form>
+  <div class="admin-panel">
+    <div class="panel-card courses-list">
+      <h2>Cursos publicados</h2>
+      <% if (courses.length === 0) { %>
+        <p>No hay cursos creados aún.</p>
+      <% } %>
+      <% courses.forEach(course => { %>
+        <article class="course-card">
+          <h3><a href="/courses/<%= course.id %>"><%= course.title %></a></h3>
+          <p><%= course.description %></p>
+          <form action="/admin/courses/<%= course.id %>/delete" method="POST" style="display:inline-block; margin-top: 0.75rem;">
+            <button type="submit" class="button-secondary" onclick="return confirm('¿Estás seguro de eliminar este curso?')">Eliminar curso</button>
+          </form>
+        </article>
+      <% }) %>
+    </div>
+  </div>
 </section>
+
 <script>
+  const sectionsContainer = document.getElementById('sections-container');
   const questionsContainer = document.getElementById('questions-container');
+  const addSectionButton = document.getElementById('add-section');
   const addQuestionButton = document.getElementById('add-question');
+  let sectionCount = 1;
   let questionCount = 1;
+
+  function getSectionOptions() {
+    let options = '';
+    for (let i = 0; i < sectionCount; i += 1) {
+      options += `<option value="${i + 1}">Sección ${i + 1}</option>`;
+    }
+    return options;
+  }
 
   function renderQuestionFields(block, index, type = 'multiple-choice') {
     const extra = block.querySelector('.question-extra');
+    const sectionSelect = block.querySelector('.question-section');
+    if (sectionSelect) {
+      sectionSelect.innerHTML = getSectionOptions();
+    }
     if (!extra) return;
+
     if (type === 'short-answer') {
       extra.innerHTML = `
         <label>Respuesta correcta</label>
@@ -93,6 +194,61 @@
     });
   }
 
+  function updateSectionLabels() {
+    sectionsContainer.querySelectorAll('.section-block').forEach((block, idx) => {
+      block.dataset.index = String(idx);
+      const title = block.querySelector('h3');
+      if (title) title.textContent = `Sección ${idx + 1}`;
+      const sectionTitleInput = block.querySelector('input[name^="sections["]');
+      if (sectionTitleInput) {
+        sectionTitleInput.name = `sections[${idx}][title]`;
+      }
+      const sectionContentInput = block.querySelector('textarea[name^="sections["]');
+      if (sectionContentInput) {
+        sectionContentInput.name = `sections[${idx}][content]`;
+      }
+    });
+
+    questionsContainer.querySelectorAll('.question-section').forEach(select => {
+      const currentValue = select.value || '1';
+      select.innerHTML = getSectionOptions();
+      select.value = currentValue;
+    });
+  }
+
+  addSectionButton.addEventListener('click', () => {
+    const index = sectionCount;
+    const block = document.createElement('div');
+    block.className = 'section-block';
+    block.dataset.index = String(index);
+    block.innerHTML = `
+      <h3>Sección ${index + 1}</h3>
+      <div class="field-group">
+        <label>Título de la sección</label>
+        <input name="sections[${index}][title]" type="text" required />
+      </div>
+      <div class="field-group">
+        <label>Contenido de la sección</label>
+        <textarea name="sections[${index}][content]" rows="3"></textarea>
+      </div>
+      <button type="button" class="button-secondary remove-section">Eliminar sección</button>
+    `;
+    sectionsContainer.appendChild(block);
+    sectionCount += 1;
+    updateSectionLabels();
+  });
+
+  sectionsContainer.addEventListener('click', event => {
+    if (event.target && event.target.classList.contains('remove-section')) {
+      const block = event.target.closest('.section-block');
+      if (block) {
+        block.remove();
+        sectionCount -= 1;
+        updateSectionLabels();
+      }
+    }
+  });
+
   questionsContainer.querySelectorAll('.question-block').forEach(block => {
     initializeQuestionBlock(block);
   });
@@ -104,20 +260,29 @@
     block.dataset.index = String(index);
     block.innerHTML = `
       <h3>Pregunta ${index + 1}</h3>
-      <label>Texto de la pregunta</label>
-      <input name="questions[${index}][text]" type="text" required />
-      <label>Tipo de pregunta</label>
-      <select name="questions[${index}][type]" class="question-type">
-        <option value="multiple-choice">Selección múltiple</option>
-        <option value="true-false">Verdadero/Falso</option>
-        <option value="short-answer">Respuesta corta</option>
-      </select>
+      <div class="field-group">
+        <label>Texto de la pregunta</label>
+        <input name="questions[${index}][text]" type="text" required />
+      </div>
+      <div class="field-group">
+        <label>Sección</label>
+        <select name="questions[${index}][section]" class="question-section"></select>
+      </div>
+      <div class="field-group">
+        <label>Tipo de pregunta</label>
+        <select name="questions[${index}][type]" class="question-type">
+          <option value="multiple-choice">Selección múltiple</option>
+          <option value="true-false">Verdadero/Falso</option>
+          <option value="short-answer">Respuesta corta</option>
+        </select>
+      </div>
       <div class="question-extra"></div>
-      <button type="button" class="button button-secondary remove-question">Eliminar pregunta</button>
+      <button type="button" class="button-secondary remove-question">Eliminar pregunta</button>
     `;
     questionsContainer.appendChild(block);
     initializeQuestionBlock(block);
     questionCount += 1;
+    updateSectionLabels();
   });
 
   questionsContainer.addEventListener('click', event => {
@@ -130,19 +295,4 @@
   });
 </script>
 
-<section class="courses-grid">
-  <h2>Cursos publicados</h2>
-  <% if (courses.length === 0) { %>
-    <p>No hay cursos creados aún.</p>
-  <% } %>
-  <% courses.forEach(course => { %>
-    <article class="course-card">
-      <h3><a href="/courses/<%= course.id %>"><%= course.title %></a></h3>
-      <p><%= course.description %></p>
-      <form action="/admin/courses/<%= course.id %>/delete" method="POST" style="display:inline;">
-        <button type="submit" onclick="return confirm('¿Estás seguro de eliminar este curso?')">Eliminar curso</button>
-      </form>
-    </article>
-  <% }) %>
-</section>
 <%- include('partials/footer') %>

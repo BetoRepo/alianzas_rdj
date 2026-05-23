@@ -1,34 +1,73 @@
 <%- include('partials/header', { title: 'Mi panel' }) %>
-<section>
-  <h1>Bienvenido, <%= user.name %></h1>
-  <p>Elige un curso para inscribirte o continúa con los cursos ya iniciados.</p>
+<section class="page-header">
+  <div>
+    <h1>Bienvenido, <%= user.name %></h1>
+    <p>Avanza por tus cursos con seguimiento por secciones y revisa tu progreso desde un solo lugar.</p>
+  </div>
+</section>
+
+<section class="stats-grid">
+  <article class="metric-card">
+    <h3>Cursos activos</h3>
+    <div class="metric-value"><%= enrolled.length %></div>
+    <p>Participa en tus cursos registrados y completa las secciones.</p>
+  </article>
+  <article class="metric-card">
+    <h3>Cursos completados</h3>
+    <div class="metric-value"><%= enrolled.filter(item => item.completed).length %></div>
+    <p>Certificados listos para descargar.</p>
+  </article>
+  <article class="metric-card">
+    <h3>Progreso total</h3>
+    <div class="metric-value"><%= enrolled.length ? Math.round(enrolled.reduce((sum, item) => sum + (item.progress || 0), 0) / enrolled.length) : 0 %>%</div>
+    <p>Promedio de avance en tus secciones activas.</p>
+  </article>
 </section>
 
 <section class="dashboard-grid">
   <div>
-    <h2>Cursos disponibles</h2>
-    <% if (courses.length === 0) { %>
-      <p>No hay cursos disponibles.</p>
-    <% } %>
-    <% courses.forEach(course => { %>
-      <article class="course-card small">
-        <h3><a href="/courses/<%= course.id %>"><%= course.title %></a></h3>
-        <p><%= course.description %></p>
-      </article>
-    <% }) %>
+    <div class="panel-card">
+      <h2>Mis cursos en progreso</h2>
+      <% if (enrolled.length === 0) { %>
+        <p>No estás inscrito en ningún curso aún. Explora cursos y comienza tu primera sección.</p>
+      <% } %>
+      <% enrolled.forEach(item => { %>
+        <article class="course-card">
+          <h3><a href="/courses/<%= item.course_id %>"><%= item.title %></a></h3>
+          <p><strong>Estado:</strong> <%= item.completed ? 'Completado' : 'En curso' %></p>
+          <% if (!item.completed) { %>
+            <div class="course-progress">
+              <div style="flex:1; min-width: 0;">
+                <div class="progress-bar"><span style="width:<%= item.progress %>%"></span></div>
+              </div>
+              <small><%= item.progress %>%</small>
+            </div>
+            <% if (item.nextSection) { %>
+              <p><strong>Siguiente sección:</strong> <%= item.nextSection %></p>
+            <% } %>
+          <% } else { %>
+            <p><strong>Curso completado</strong></p>
+          <% } %>
+          <a class="button-secondary" href="/courses/<%= item.course_id %>">Continuar</a>
+        </article>
+      <% }) %>
+    </div>
   </div>
 
   <div>
-    <h2>Mis cursos</h2>
-    <% if (enrolled.length === 0) { %>
-      <p>No estás inscrito en ningún curso aún.</p>
-    <% } %>
-    <% enrolled.forEach(item => { %>
-      <article class="course-card small">
-        <h3><a href="/courses/<%= item.course_id %>"><%= item.title %></a></h3>
-        <p>Estado: <strong><%= item.completed ? 'Completado' : 'Inscrito' %></strong></p>
-      </article>
-    <% }) %>
+    <div class="panel-card">
+      <h2>Explorar cursos</h2>
+      <% if (courses.length === 0) { %>
+        <p>No hay cursos disponibles en este momento.</p>
+      <% } %>
+      <% courses.forEach(course => { %>
+        <article class="course-card">
+          <h3><a href="/courses/<%= course.id %>"><%= course.title %></a></h3>
+          <p><%= course.description %></p>
+          <a class="button-secondary" href="/courses/<%= course.id %>">Ver curso</a>
+        </article>
+      <% }) %>
+    </div>
   </div>
 </section>
 

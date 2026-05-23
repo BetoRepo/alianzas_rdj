@@ -103,7 +103,19 @@ app.get('/logout', (req, res) => {
 app.get('/dashboard', requireLogin, async (req, res) => {
   const courses = await db.getCourses();
   const enrolled = await db.getEnrollmentsByUser(req.user.id);
-  res.render('dashboard', { courses, enrolled });
+  const enrichedEnrollments = await Promise.all(enrolled.map(async (item) => {
+    const sections = await db.getSectionsByCourse(item.course_id);
+    const totalSections = sections.length;
+    const completedSections = Number(item.completed) ? totalSections : Math.max(0, Number(item.current_section_order || 1) - 1);
+    const nextSection = !item.completed && sections[completedSections] ? sections[completedSections].title : null;
+    return {
+      ...item,
+      totalSections,
+      progress: totalSections ? Math.round((completedSections / totalSections) * 100) : 0,
+      nextSection
+    };
+  }));
+  res.render('dashboard', { courses, enrolled: enrichedEnrollments });
 });
 
 app.get('/courses/:id', requireLogin, async (req, res) => {
@@ -114,12 +126,16 @@ app.get('/courses/:id', requireLogin, async (req, res) => {
   const enrolled = await db.getEnrollment(req.user.id, course.id);
   if (enrolled) {
     enrolled.completed = Number(enrolled.completed || 0);
+    enrolled.current_section_order = Number(enrolled.current_section_order || 1);
   }
-  const questions = await db.getQuestionsByCourse(course.id) || [];
+  const sections = await db.getSectionsByCourse(course.id) || [];
+  const currentSectionIndex = enrolled ? Math.min(Math.max(enrolled.current_section_order - 1, 0), Math.max(sections.length - 1, 0)) : 0;
+
   res.render('course', {
     course,
     enrolled,
-    questions,
+    sections,
+    currentSectionIndex,
     selectedAnswers: {},
     quizError: null,
     scoreMessage: null,
@@ -138,14 +154,35 @@ app.post('/courses/:id/submit', requireLogin, async (req, res) => {
     req.session.message = 'Debes inscribirte en el curso antes de responder el quiz.';
     return res.redirect(`/courses/${course.id}`);
   }
+  enrolled.completed = Number(enrolled.completed || 0);
+  enrolled.current_section_order = Number(enrolled.current_section_order || 1);
 
-  const questions = await db.getQuestionsByCourse(course.id) || [];
+  const sections = await db.getSectionsByCourse(course.id) || [];
+  const currentSectionIndex = Math.min(Math.max(enrolled.current_section_order - 1, 0), Math.max(sections.length - 1, 0));
+  const currentSection = sections[currentSectionIndex] || null;
+  const questions = currentSection ? currentSection.questions : [];
+
+  if (!currentSection || questions.length === 0) {
+    res.render('course', {
+      course,
+      enrolled,
+      sections,
+      currentSectionIndex,
+      selectedAnswers: {},
+      questionResults: {},
+      quizError: 'No hay preguntas disponibles en la sección actual.',
+      scoreMessage: null
+    });
+    return;
+  }
+
   const answers = {};
   for (const key of Object.keys(req.body || {})) {
     if (key.startsWith('answers_')) {
       answers[key.replace('answers_', '')] = req.body[key];
     }
   }
+
   const passingScore = Number(course.passing_score || 1);
   let score = 0;
   const questionResults = {};
@@ -168,15 +205,38 @@ app.post('/courses/:id/submit', requireLogin, async (req, res) => {
     }
   }
 
-  if (score < passingScore) {
+  const requiredScore = questions.length;
+  const isSectionPassed = score === requiredScore;
+
+  if (!isSectionPassed) {
     res.render('course', {
       course,
       enrolled,
-      questions,
+      sections,
+      currentSectionIndex,
       selectedAnswers: answers,
       questionResults,
-      quizError: `No alcanzaste el puntaje mínimo. Obtuviste ${score} de ${passingScore}. Intenta de nuevo.`,
-      scoreMessage: `Necesitas al menos ${passingScore} puntos para completar este curso. Puedes intentarlo tantas veces como quieras.`
+      quizError: `No pasaste la sección. Obtuviste ${score} de ${requiredScore}. Revisa tus respuestas e intenta de nuevo.`,
+      scoreMessage: `Debes lograr al menos ${requiredScore} puntos en esta sección para avanzar.`
+    });
+    return;
+  }
+
+  const nextSectionOrder = enrolled.current_section_order + 1;
+  const hasMoreSections = nextSectionOrder <= sections.length;
+
+  if (hasMoreSections) {
+    await db.updateEnrollmentSection(req.user.id, course.id, nextSectionOrder);
+    enrolled.current_section_order = nextSectionOrder;
+    res.render('course', {
+      course,
+      enrolled,
+      sections,
+      currentSectionIndex: enrolled.current_section_order - 1,
+      selectedAnswers: {},
+      questionResults: {},
+      scoreMessage: `¡Sección completada! Continúa con la siguiente sección.`,
+      quizSuccess: null
     });
     return;
   }
@@ -188,7 +248,8 @@ app.post('/courses/:id/submit', requireLogin, async (req, res) => {
   res.render('course', {
     course,
     enrolled,
-    questions,
+    sections,
+    currentSectionIndex,
     selectedAnswers: answers,
     questionResults,
     quizSuccess: '¡Has finalizado el curso! Ahora puedes descargar tu certificado.',
@@ -230,12 +291,40 @@ app.get('/certificate/:id', requireLogin, async (req, res) => {
 });
 
 app.get('/admin', requireAdmin, async (req, res) => {
-  const courses = await db.getCourses();
-  res.render('admin', { courses });
+  try {
+    const courses = await db.getCourses();
+    const userCountRow = await db.getUserCount();
+    const courseCountRow = await db.getCourseCount();
+    const enrollmentCountRow = await db.getEnrollmentCount();
+    const completedCountRow = await db.getCompletedEnrollmentCount();
+    const totalEnrollments = Number(enrollmentCountRow?.count || 0);
+    const completedEnrollments = Number(completedCountRow?.count || 0);
+    const completionRate = totalEnrollments > 0 ? Math.round((completedEnrollments / totalEnrollments) * 100) : 0;
+
+    res.render('admin', {
+      courses,
+      userCount: Number(userCountRow?.count || 0),
+      courseCount: Number(courseCountRow?.count || 0),
+      completedEnrollments,
+      completionRate
+    });
+  } catch (error) {
+    console.error('Error loading admin dashboard:', error);
+    const courses = await db.getCourses().catch(() => []);
+    res.render('admin', {
+      courses,
+      userCount: 0,
+      courseCount: 0,
+      completedEnrollments: 0,
+      completionRate: 0
+    });
+  }
 });
 
 app.post('/admin/create', requireAdmin, async (req, res) => {
   const { title, description, content, video_url, passing_score } = req.body;
+  const sectionsInput = req.body.sections || {};
+  const sections = Array.isArray(sectionsInput) ? sectionsInput : Object.values(sectionsInput || {});
   const questionsInput = req.body.questions || {};
   const questions = Array.isArray(questionsInput) ? questionsInput : Object.values(questionsInput || {});
   const parsedPassingScore = Number(passing_score) || 1;
@@ -245,12 +334,26 @@ app.post('/admin/create', requireAdmin, async (req, res) => {
     return res.redirect('/admin');
   }
 
+  if (sections.length === 0) {
+    req.session.message = 'Debes agregar al menos una sección para el curso.';
+    return res.redirect('/admin');
+  }
+
   if (questions.length === 0) {
     req.session.message = 'Debes agregar al menos una pregunta para que el curso sea respondible.';
     return res.redirect('/admin');
   }
 
   const courseId = await db.createCourse(title, description, content, video_url, parsedPassingScore);
+  const sectionIdsByIndex = {};
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    if (!section || !section.title) continue;
+    const orderIndex = index + 1;
+    const sectionId = await db.createSection(courseId, section.title, section.content || '', orderIndex);
+    sectionIdsByIndex[String(orderIndex)] = sectionId;
+  }
+
   for (const question of questions) {
     if (!question || !question.text) {
       continue;
@@ -258,7 +361,9 @@ app.post('/admin/create', requireAdmin, async (req, res) => {
 
     const questionType = question.type || 'multiple-choice';
     const correctText = questionType === 'short-answer' ? question.answer : null;
-    const questionId = await db.createQuestion(courseId, question.text, questionType, correctText);
+    const sectionIndex = String(question.section || '1');
+    const sectionId = sectionIdsByIndex[sectionIndex] || null;
+    const questionId = await db.createQuestion(courseId, question.text, questionType, correctText, sectionId);
     const options = Array.isArray(question.options) ? question.options : Object.values(question.options || {});
     const correctIndex = typeof question.correct !== 'undefined' ? String(question.correct) : null;
 

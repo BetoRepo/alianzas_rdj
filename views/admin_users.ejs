@@ -1,51 +1,69 @@
 <%- include('partials/header', { title: 'Administrar Usuarios' }) %>
-<section>
-  <h1>Administrar Usuarios</h1>
-  <p>Gestiona los usuarios del sistema: crea nuevos usuarios o elimina los existentes.</p>
+<section class="page-header admin-users-header">
+  <div>
+    <h1>Administrar usuarios</h1>
+    <p>Desde aquí puedes crear cuentas nuevas y revisar el listado de usuarios activos.</p>
+  </div>
 </section>
 
-<section class="form-card">
-  <h2>Crear nuevo usuario</h2>
-  <form action="/admin/users/create" method="POST">
-    <label>Nombre</label>
-    <input name="name" type="text" required />
-    <label>Correo electrónico</label>
-    <input name="email" type="email" required />
-    <label>Contraseña</label>
-    <input name="password" type="password" required />
-    <label>
-      <input name="is_admin" type="checkbox" /> Es administrador
-    </label>
-    <button type="submit">Crear usuario</button>
-  </form>
-</section>
+<section class="admin-users-grid">
+  <div class="panel-card">
+    <h2>Nuevo usuario</h2>
+    <p>Agrega un usuario rápidamente con rol de administrador o usuario normal.</p>
+    <form action="/admin/users/create" method="POST">
+      <div class="field-group">
+        <label>Nombre</label>
+        <input name="name" type="text" required />
+      </div>
+      <div class="field-group">
+        <label>Correo electrónico</label>
+        <input name="email" type="email" required />
+      </div>
+      <div class="field-group">
+        <label>Contraseña</label>
+        <input name="password" type="password" required />
+      </div>
+      <div class="field-group checkbox-group">
+        <label>
+          <input name="is_admin" type="checkbox" /> Administrador
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="button">Crear usuario</button>
+      </div>
+    </form>
+  </div>
 
-<section class="form-card">
-  <h2>Lista de usuarios</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Nombre</th>
-        <th>Correo</th>
-        <th>Rol</th>
-        <th>Acciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% users.forEach(user => { %>
-        <tr>
-          <td><%= user.name %></td>
-          <td><%= user.email %></td>
-          <td><%= user.is_admin ? 'Administrador' : 'Usuario' %></td>
-          <td>
-            <form action="/admin/users/<%= user.id %>/delete" method="POST" style="display:inline;">
-              <button type="submit" onclick="return confirm('¿Estás seguro de eliminar este usuario?')">Eliminar</button>
-            </form>
-          </td>
-        </tr>
-      <% }); %>
-    </tbody>
-  </table>
+  <div class="panel-card">
+    <h2>Usuarios registrados</h2>
+    <p>Revisa los usuarios existentes y elimina los que ya no sean necesarios.</p>
+    <div class="table-scroll">
+      <table class="user-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Correo</th>
+            <th>Rol</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(user => { %>
+            <tr>
+              <td><%= user.name %></td>
+              <td><%= user.email %></td>
+              <td><%= user.is_admin ? 'Administrador' : 'Usuario' %></td>
+              <td>
+                <form action="/admin/users/<%= user.id %>/delete" method="POST">
+                  <button type="submit" class="button-secondary" onclick="return confirm('¿Estás seguro de eliminar este usuario?')">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 <%- include('partials/footer') %>

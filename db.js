@@ -36,17 +36,32 @@ db.serialize(() => {
     }
   });
 
+  db.run(`CREATE TABLE IF NOT EXISTS course_sections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    order_index INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY(course_id) REFERENCES courses(id)
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS course_questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     course_id INTEGER NOT NULL,
+    section_id INTEGER,
     question_text TEXT NOT NULL,
     question_type TEXT NOT NULL DEFAULT 'multiple-choice',
     correct_text TEXT,
-    FOREIGN KEY(course_id) REFERENCES courses(id)
+    FOREIGN KEY(course_id) REFERENCES courses(id),
+    FOREIGN KEY(section_id) REFERENCES course_sections(id)
   )`);
 
   db.all(`PRAGMA table_info(course_questions)`, (err, rows) => {
     if (!err) {
+      const hasSection = rows.some(row => row.name === 'section_id');
+      if (!hasSection) {
+        db.run(`ALTER TABLE course_questions ADD COLUMN section_id INTEGER`);
+      }
       const hasType = rows.some(row => row.name === 'question_type');
       if (!hasType) {
         db.run(`ALTER TABLE course_questions ADD COLUMN question_type TEXT NOT NULL DEFAULT 'multiple-choice'`);
@@ -71,12 +86,22 @@ db.serialize(() => {
     user_id INTEGER NOT NULL,
     course_id INTEGER NOT NULL,
     enrolled_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    current_section_order INTEGER NOT NULL DEFAULT 1,
     completed INTEGER NOT NULL DEFAULT 0,
     completed_at TEXT,
     UNIQUE(user_id, course_id),
     FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(course_id) REFERENCES courses(id)
   )`);
+
+  db.all(`PRAGMA table_info(enrollments)`, (err, rows) => {
+    if (!err) {
+      const hasCurrentSection = rows.some(row => row.name === 'current_section_order');
+      if (!hasCurrentSection) {
+        db.run(`ALTER TABLE enrollments ADD COLUMN current_section_order INTEGER NOT NULL DEFAULT 1`);
+      }
+    }
+  });
 
   db.get(`SELECT COUNT(*) AS count FROM users WHERE is_admin = 1`, (err, row) => {
     if (!err && row.count === 0) {
@@ -135,9 +160,9 @@ module.exports = {
       });
     });
   },
-  createQuestion(courseId, questionText, questionType = 'multiple-choice', correctText = null) {
+  createQuestion(courseId, questionText, questionType = 'multiple-choice', correctText = null, sectionId = null) {
     return new Promise((resolve, reject) => {
-      db.run(`INSERT INTO course_questions (course_id, question_text, question_type, correct_text) VALUES (?, ?, ?, ?)`, [courseId, questionText, questionType, correctText], function(err) {
+      db.run(`INSERT INTO course_questions (course_id, section_id, question_text, question_type, correct_text) VALUES (?, ?, ?, ?, ?)`, [courseId, sectionId, questionText, questionType, correctText], function(err) {
         if (err) return reject(err);
         resolve(this.lastID);
       });
@@ -151,14 +176,44 @@ module.exports = {
       });
     });
   },
-  getQuestionsByCourse(courseId) {
+  createSection(courseId, title, content, orderIndex = 1) {
+    return new Promise((resolve, reject) => {
+      db.run(`INSERT INTO course_sections (course_id, title, content, order_index) VALUES (?, ?, ?, ?)`, [courseId, title, content, orderIndex], function(err) {
+        if (err) return reject(err);
+        resolve(this.lastID);
+      });
+    });
+  },
+  getSectionsByCourse(courseId) {
     return new Promise(async (resolve, reject) => {
       try {
-        const questions = await query(`SELECT * FROM course_questions WHERE course_id = ?`, [courseId]);
-        for (const question of questions) {
-          question.options = await query(`SELECT * FROM question_options WHERE question_id = ?`, [question.id]);
+        let sections = await query(`SELECT * FROM course_sections WHERE course_id = ? ORDER BY order_index ASC`, [courseId]);
+        if (sections.length === 0) {
+          const questions = await query(`SELECT * FROM course_questions WHERE course_id = ? ORDER BY id ASC`, [courseId]);
+          for (const question of questions) {
+            question.options = await query(`SELECT * FROM question_options WHERE question_id = ?`, [question.id]);
+          }
+          if (questions.length === 0) {
+            return resolve([]);
+          }
+          sections = [{
+            id: null,
+            course_id: courseId,
+            title: 'Sección 1',
+            content: '',
+            order_index: 1,
+            questions
+          }];
+          return resolve(sections);
         }
-        resolve(questions);
+
+        for (const section of sections) {
+          section.questions = await query(`SELECT * FROM course_questions WHERE section_id = ? ORDER BY id ASC`, [section.id]);
+          for (const question of section.questions) {
+            question.options = await query(`SELECT * FROM question_options WHERE question_id = ?`, [question.id]);
+          }
+        }
+        resolve(sections);
       } catch (error) {
         reject(error);
       }
@@ -178,6 +233,14 @@ module.exports = {
   getEnrollment(userId, courseId) {
     return get(`SELECT * FROM enrollments WHERE user_id = ? AND course_id = ?`, [userId, courseId]);
   },
+  updateEnrollmentSection(userId, courseId, sectionOrder) {
+    return new Promise((resolve, reject) => {
+      db.run(`UPDATE enrollments SET current_section_order = ? WHERE user_id = ? AND course_id = ?`, [sectionOrder, userId, courseId], function(err) {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  },
   completeCourse(userId, courseId) {
     return new Promise((resolve, reject) => {
       db.run(`UPDATE enrollments SET completed = 1, completed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?`, [userId, courseId], function(err) {
@@ -188,6 +251,18 @@ module.exports = {
   },
   getAllUsers() {
     return query(`SELECT id, name, email, is_admin FROM users ORDER BY name`);
+  },
+  getUserCount() {
+    return get(`SELECT COUNT(*) AS count FROM users`, []);
+  },
+  getCourseCount() {
+    return get(`SELECT COUNT(*) AS count FROM courses`, []);
+  },
+  getEnrollmentCount() {
+    return get(`SELECT COUNT(*) AS count FROM enrollments`, []);
+  },
+  getCompletedEnrollmentCount() {
+    return get(`SELECT COUNT(*) AS count FROM enrollments WHERE completed = 1`, []);
   },
   deleteUser(userId) {
     return new Promise((resolve, reject) => {
