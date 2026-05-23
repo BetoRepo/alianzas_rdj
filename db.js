@@ -213,6 +213,15 @@ module.exports = {
             question.options = await query(`SELECT * FROM question_options WHERE question_id = ?`, [question.id]);
           }
         }
+
+        const unassignedQuestions = await query(`SELECT * FROM course_questions WHERE course_id = ? AND section_id IS NULL ORDER BY id ASC`, [courseId]);
+        if (unassignedQuestions.length > 0 && sections.length > 0) {
+          for (const question of unassignedQuestions) {
+            question.options = await query(`SELECT * FROM question_options WHERE question_id = ?`, [question.id]);
+          }
+          sections[0].questions = sections[0].questions.concat(unassignedQuestions);
+        }
+
         resolve(sections);
       } catch (error) {
         reject(error);

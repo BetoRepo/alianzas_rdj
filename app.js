@@ -129,6 +129,13 @@ app.get('/courses/:id', requireLogin, async (req, res) => {
     enrolled.current_section_order = Number(enrolled.current_section_order || 1);
   }
   const sections = await db.getSectionsByCourse(course.id) || [];
+  if (enrolled) {
+    enrolled.completed = Number(enrolled.completed || 0);
+    enrolled.current_section_order = Number(enrolled.current_section_order || 1);
+    if (!enrolled.completed && sections.length > 0) {
+      enrolled.current_section_order = Math.min(Math.max(enrolled.current_section_order, 1), sections.length);
+    }
+  }
   const currentSectionIndex = enrolled ? Math.min(Math.max(enrolled.current_section_order - 1, 0), Math.max(sections.length - 1, 0)) : 0;
 
   res.render('course', {
@@ -183,7 +190,8 @@ app.post('/courses/:id/submit', requireLogin, async (req, res) => {
     }
   }
 
-  const passingScore = Number(course.passing_score || 1);
+  const passingScore = Number(course.passing_score || questions.length || 1);
+  const requiredScore = questions.length > 0 ? Math.min(Math.max(passingScore, 1), questions.length) : 0;
   let score = 0;
   const questionResults = {};
 
@@ -205,8 +213,7 @@ app.post('/courses/:id/submit', requireLogin, async (req, res) => {
     }
   }
 
-  const requiredScore = questions.length;
-  const isSectionPassed = score === requiredScore;
+  const isSectionPassed = score >= requiredScore;
 
   if (!isSectionPassed) {
     res.render('course', {
@@ -327,7 +334,7 @@ app.post('/admin/create', requireAdmin, async (req, res) => {
   const sections = Array.isArray(sectionsInput) ? sectionsInput : Object.values(sectionsInput || {});
   const questionsInput = req.body.questions || {};
   const questions = Array.isArray(questionsInput) ? questionsInput : Object.values(questionsInput || {});
-  const parsedPassingScore = Number(passing_score) || 1;
+  const parsedPassingScore = Math.max(Number(passing_score) || 0, questions.length || 1);
 
   if (!title || !description || !content) {
     req.session.message = 'Título, descripción y contenido son obligatorios.';

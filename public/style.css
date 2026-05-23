@@ -150,12 +150,151 @@ html {
   color: #1d113d;
 }
 
-.course-card p,
-.form-card p,
+.course-detail,
+.section-card,
+.course-video,
+.course-content,
+.certificate-section {
+  color: #1b0f38;
+  background: rgba(255,255,255,0.98);
+}
+
+.course-detail {
+  background: rgba(255,255,255,0.98);
+  border-radius: 30px;
+  padding: 2rem 2.25rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 32px 80px rgba(15,11,30,0.12);
+}
+
+.course-detail p,
+.course-content p,
 .section-card p,
 .metric-card p,
-.auth-panel p {
-  color: #5b4e7f;
+.auth-panel p,
+.certificate-section p,
+.course-detail small,
+.course-progress small,
+.quiz-question p,
+.quiz-option span,
+.section-progress h2,
+.course-content h2,
+.section-card h2 {
+  color: #1b0f38;
+  line-height: 1.9;
+}
+
+.course-detail h1 {
+  margin-bottom: 0.65rem;
+  color: #120a2f;
+}
+
+.course-detail h2,
+.section-card h2,
+.section-progress h2 {
+  color: #120a2f;
+}
+
+.course-detail strong,
+.section-card strong,
+.alert strong {
+  color: #2b2160;
+}
+
+.section-progress li {
+  background: rgba(109,74,255,0.10);
+  color: #2e2660;
+}
+
+.alert {
+  background: rgba(157,123,255,0.22);
+  color: #2c2163;
+  border-left: 4px solid rgba(109,74,255,0.95);
+}
+
+.quiz-question p,
+.quiz-option span,
+.course-progress small {
+  color: #332a61;
+}
+
+.certificate-banner {
+  background: rgba(109,74,255,0.08);
+  border: 1px solid rgba(109,74,255,0.24);
+  border-radius: 24px;
+  padding: 1.2rem 1.3rem;
+  margin: 1.25rem 0 1rem;
+}
+
+.certificate-banner p {
+  margin: 0;
+  color: #2f1f60;
+  font-weight: 600;
+}
+
+.certificate-button {
+  display: inline-flex;
+  margin-top: 1rem;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, #5d2dfd, #8f63ff);
+  color: #fff;
+  border-radius: 999px;
+}
+
+.course-detail h1 {
+  font-size: clamp(2.2rem, 3vw, 3.2rem);
+}
+
+.section-progress li {
+  background: rgba(109,74,255,0.08);
+  color: #30235f;
+  border-radius: 16px;
+  padding: 1rem 1.2rem;
+  font-weight: 600;
+  border: 1px solid rgba(109,74,255,0.18);
+}
+
+.alert {
+  background: rgba(157,123,255,0.18);
+  padding: 1rem 1.2rem;
+  border-left: 4px solid rgba(109,74,255,0.9);
+  border-radius: 16px;
+  margin-bottom: 1rem;
+  color: #352468;
+}
+
+.quiz-question p {
+  color: #2a1b54;
+}
+
+.quiz-option span {
+  color: #2a1b54;
+}
+
+.certificate-section {
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(109,74,255,0.18);
+  border-radius: 28px;
+  padding: 2rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 26px 60px rgba(15,11,30,0.08);
+}
+
+.certificate-section h2 {
+  margin-bottom: 0.75rem;
+  color: #2f1f64;
+}
+
+.certificate-button {
+  display: inline-flex;
+  margin-top: 1rem;
+  background: linear-gradient(135deg, #6d4aff, #a364ff);
+  color: white;
+  padding: 1rem 1.6rem;
+}
+
+.course-progress small {
+  color: #5a4f7f;
 }
 
 .course-card small,

@@ -1,7 +1,20 @@
 <%- include('partials/header', { title: course.title }) %>
 <section class="course-detail">
+  <% const isCourseCompleted = enrolled && Number(enrolled.completed) === 1; %>
+  <% const sectionCount = Array.isArray(sections) ? sections.length : 0; %>
+  <% const currentSection = sectionCount ? (sections[currentSectionIndex] || sections[0]) : null; %>
+  <% const currentSectionNumber = currentSection ? (currentSection.order_index || currentSectionIndex + 1) : 0; %>
+  <% const hasSectionQuestions = currentSection && Array.isArray(currentSection.questions) && currentSection.questions.length > 0; %>
+
   <h1><%= course.title %></h1>
   <p><%= course.description %></p>
+
+  <% if (isCourseCompleted) { %>
+    <div class="certificate-banner">
+      <p>¡Has completado este curso! Tu certificado ya está disponible.</p>
+      <a class="button certificate-button" href="/certificate/<%= course.id %>">Ver certificado</a>
+    </div>
+  <% } %>
 
   <% if (course.video_url) { %>
     <div class="course-video">
@@ -30,11 +43,6 @@
     <% } %>
   </div>
 
-  <% const isCourseCompleted = enrolled && Number(enrolled.completed) === 1; %>
-  <% const sectionCount = sections ? sections.length : 0; %>
-  <% const currentSection = sectionCount ? (sections[currentSectionIndex] || sections[0]) : null; %>
-  <% const currentSectionNumber = currentSection ? (currentSection.order_index || currentSectionIndex + 1) : 0; %>
-
   <% if (!enrolled) { %>
     <form action="/courses/<%= course.id %>/enroll" method="POST">
       <button class="button" type="submit">Inscribirme</button>
@@ -44,11 +52,16 @@
       <div class="section-progress">
         <h2>Progreso por sección</h2>
         <ul>
-          <% sections.forEach((section, idx) => { %>
-            <% const sectionStatus = isCourseCompleted ? 'Completada' : idx + 1 < currentSectionNumber ? 'Completada' : idx + 1 === currentSectionNumber ? 'Actual' : 'Bloqueada'; %>
+          <% sections.forEach((section, idx) => {
+               if (idx + 1 > currentSectionNumber) return;
+               const sectionStatus = idx + 1 < currentSectionNumber ? 'Completada' : 'Actual';
+          %>
             <li><strong><%= section.title %></strong> - <%= sectionStatus %></li>
           <% }) %>
         </ul>
+        <% if (sectionCount > currentSectionNumber) { %>
+          <div class="alert">Las siguientes secciones se desbloquearán cuando completes y apruebes la actual.</div>
+        <% } %>
       </div>
 
       <div class="section-card">
@@ -58,7 +71,7 @@
         <% } %>
         <div class="course-progress">
           <div style="flex:1; min-width:0;">
-            <div class="progress-bar"><span style="width: <%= currentSection.questions ? Math.round((currentSection.questions.filter(q => questionResults && questionResults[q.id] === 'correct').length / currentSection.questions.length) * 100) : 0 %>%"></span></div>
+            <div class="progress-bar"><span style="width: <%= hasSectionQuestions ? Math.round((currentSection.questions.filter(q => questionResults && questionResults[q.id] === 'correct').length / currentSection.questions.length) * 100) : 0 %>%"></span></div>
           </div>
           <small>Sección <%= currentSectionNumber %> de <%= sectionCount %></small>
         </div>
@@ -73,7 +86,7 @@
         <div class="alert">Completa esta sección para desbloquear la siguiente.</div>
       <% } %>
 
-      <% if (currentSection.questions && currentSection.questions.length > 0) { %>
+      <% if (hasSectionQuestions) { %>
         <h2>Preguntas de la sección</h2>
         <form action="/courses/<%= course.id %>/submit" method="POST">
           <input type="hidden" name="section_order" value="<%= currentSectionNumber %>" />
@@ -107,7 +120,11 @@
       <div class="alert">Este curso no tiene secciones configuradas todavía.</div>
     <% } %>
   <% } else { %>
-    <p>Curso completado. <a class="button" href="/certificate/<%= course.id %>">Ver certificado</a></p>
+    <section class="certificate-section">
+      <h2>¡Felicidades! Curso completado</h2>
+      <p>Tu certificado ya está disponible. Haz clic en el botón para verlo y descargarlo.</p>
+      <a class="button certificate-button" href="/certificate/<%= course.id %>">Ver certificado</a>
+    </section>
     <% if (typeof quizSuccess !== 'undefined' && quizSuccess) { %>
       <div class="modal-overlay" id="completionModal">
         <div class="modal-card">
