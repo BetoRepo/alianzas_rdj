@@ -1,26 +1,11 @@
-# Aula Virtual Scout Venezuela
 
-Aplicación web simple para una aula virtual con inicio de sesión, cursos, finalización y certificados.
+  # Web and Android Design
 
-## Instalación
+  This is a code bundle for Web and Android Design. The original project is available at https://www.figma.com/design/2NbhP8DwTXQxXF2GMxBYHl/Web-and-Android-Design.
 
-1. Abre la carpeta del proyecto en la terminal.
-2. Ejecuta `npm install`.
-3. Ejecuta `npm start`.
-4. Abre `http://localhost:3000`.
+  ## Running the code
 
-## Acceso administrador
+  Run `npm i` to install the dependencies.
 
-- Correo: `admin@scoutvenezuela.org`
-- Contraseña: `admin123`
-
-## Funcionalidades
-
-- Registro de usuario.
-- Inicio de sesión.
-- Creación de cursos (administrador).
-- Inscripción en cursos.
-- Finalización de cursos.
-- Certificado con nombre y fecha.
-
-
+  Run `npm run dev` to start the development server.
+  
