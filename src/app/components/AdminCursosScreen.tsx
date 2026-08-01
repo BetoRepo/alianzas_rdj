@@ -67,6 +67,7 @@ export function AdminCursosScreen() {
   const [courseModules, setCourseModules] = useState<any[]>([]);
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleForm, setModuleForm] = useState<ModuleForm>(createDefaultModule());
+  const [uploadingBlockIndex, setUploadingBlockIndex] = useState<number | null>(null);
 
   function resetCourseForm() {
     setTitle("");
@@ -216,6 +217,45 @@ export function AdminCursosScreen() {
       ...prev,
       blocks: prev.blocks.map((block, index) => index === blockIndex ? { ...block, [field]: value } : block)
     }));
+  }
+
+  async function uploadBlockFile(blockIndex: number, file: File) {
+    if (!selectedCourseForModules) {
+      alert("Primero selecciona o crea un curso para subir archivos.");
+      return;
+    }
+
+    const bucket = "course-media";
+    const extension = file.name.split(".").pop() || "";
+    const filePath = `courses/${selectedCourseForModules.id}/blocks/${Date.now()}_${blockIndex}.${extension}`;
+
+    setUploadingBlockIndex(blockIndex);
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, { cacheControl: "3600", upsert: true });
+    setUploadingBlockIndex(null);
+
+    if (uploadError) {
+      alert(`Error al subir el archivo: ${uploadError.message}`);
+      return;
+    }
+
+    const { data: publicUrlData, error: publicUrlError } = await supabase.storage.from(bucket).getPublicUrl(filePath);
+    if (publicUrlError || !publicUrlData?.publicUrl) {
+      alert(`No se pudo obtener la URL del archivo: ${publicUrlError?.message ?? "sin URL pública"}`);
+      return;
+    }
+
+    updateModuleBlock(blockIndex, "content", publicUrlData.publicUrl);
+  }
+
+  function handleBlockDrop(blockIndex: number, event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!event.dataTransfer.files.length) return;
+    const file = event.dataTransfer.files[0];
+    uploadBlockFile(blockIndex, file);
+  }
+
+  function handleBlockDragOver(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
   }
 
   function updateModuleBlockType(blockIndex: number, type: ContentBlock["type"]) {
@@ -403,18 +443,38 @@ export function AdminCursosScreen() {
                         )}
 
                         {block.type === "image" && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500"><ImageIcon className="w-3.5 h-3.5" /> Enlace de imagen</div>
-                            <input type="text" value={block.content} onChange={(e) => updateModuleBlock(index, "content", e.target.value)} placeholder="https://.../imagen.jpg" className="w-full px-3 py-2 border rounded-xl text-sm" />
-                            <input type="text" value={block.caption || ""} onChange={(e) => updateModuleBlock(index, "caption", e.target.value)} placeholder="Pie de imagen (opcional)" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500"><ImageIcon className="w-3.5 h-3.5" /> Imagen</div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <input type="text" value={block.content} onChange={(e) => updateModuleBlock(index, "content", e.target.value)} placeholder="https://.../imagen.jpg" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                              <input type="text" value={block.caption || ""} onChange={(e) => updateModuleBlock(index, "caption", e.target.value)} placeholder="Pie de imagen (opcional)" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                            </div>
+                            <div
+                              onDragOver={handleBlockDragOver}
+                              onDrop={(e) => handleBlockDrop(index, e)}
+                              className="rounded-2xl border border-dashed border-gray-300 bg-white/90 p-3 text-xs text-gray-500 text-center cursor-pointer"
+                            >
+                              Arrastra una imagen aquí o <label className="text-purple-600 underline cursor-pointer"><input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadBlockFile(index, e.target.files[0])} />selecciona un archivo</label>
+                              {uploadingBlockIndex === index && <div className="text-[10px] text-gray-400 mt-2">Subiendo archivo...</div>}
+                            </div>
                           </div>
                         )}
 
                         {block.type === "video" && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500"><VideoIcon className="w-3.5 h-3.5" /> Enlace o ID de video</div>
-                            <input type="text" value={block.content} onChange={(e) => updateModuleBlock(index, "content", e.target.value)} placeholder="https://youtube.com/watch?v=..." className="w-full px-3 py-2 border rounded-xl text-sm" />
-                            <input type="text" value={block.caption || ""} onChange={(e) => updateModuleBlock(index, "caption", e.target.value)} placeholder="Descripción del video (opcional)" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500"><VideoIcon className="w-3.5 h-3.5" /> Video</div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <input type="text" value={block.content} onChange={(e) => updateModuleBlock(index, "content", e.target.value)} placeholder="https://youtube.com/watch?v=... o URL de video" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                              <input type="text" value={block.caption || ""} onChange={(e) => updateModuleBlock(index, "caption", e.target.value)} placeholder="Descripción del video (opcional)" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                            </div>
+                            <div
+                              onDragOver={handleBlockDragOver}
+                              onDrop={(e) => handleBlockDrop(index, e)}
+                              className="rounded-2xl border border-dashed border-gray-300 bg-white/90 p-3 text-xs text-gray-500 text-center cursor-pointer"
+                            >
+                              Arrastra un video aquí o <label className="text-purple-600 underline cursor-pointer"><input type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadBlockFile(index, e.target.files[0])} />selecciona un archivo</label>
+                              {uploadingBlockIndex === index && <div className="text-[10px] text-gray-400 mt-2">Subiendo archivo...</div>}
+                            </div>
                           </div>
                         )}
                       </div>

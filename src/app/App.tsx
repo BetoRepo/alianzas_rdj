@@ -164,7 +164,10 @@ function downloadCertificateImage(profile: any, course: Course) {
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");
   link.download = `${course.title.replace(/\s+/g, "_")}_${name.replace(/\s+/g, "_")}.png`;
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 }
 
 // ─── COMPONENTES AUXILIARES DEL ESTUDIANTE (CONSERVAN TU DISEÑO EXACTO) ───────
@@ -417,7 +420,14 @@ function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => vo
                 )}
                 {block.type === "video" && block.content && (
                   <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-inner my-4">
-                    <iframe className="w-full h-full" src={getVideoEmbedUrl(block.content)} title="Video del módulo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+                    {/^https?:\/\//i.test(block.content) && (block.content.includes("youtube.com") || block.content.includes("youtu.be")) ? (
+                      <iframe className="w-full h-full" src={getVideoEmbedUrl(block.content)} title="Video del módulo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+                    ) : (
+                      <video controls className="w-full h-full bg-black">
+                        <source src={block.content} />
+                        Tu navegador no soporta este formato de video.
+                      </video>
+                    )}
                   </div>
                 )}
               </div>
