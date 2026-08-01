@@ -103,6 +103,70 @@ function getVideoEmbedUrl(content: string) {
   return `https://www.youtube.com/embed/${trimmed}`;
 }
 
+function downloadCertificateImage(profile: any, course: Course) {
+  const width = 1600;
+  const height = 1100;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const name = String(profile?.name || "Scout").toUpperCase();
+  const courseTitle = String(course.title || "Insignia Scout").toUpperCase();
+  const issueDate = new Date().toLocaleDateString("es-VE", { year: "numeric", month: "long", day: "numeric" });
+
+  ctx.fillStyle = "#5b21b6";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(80, 80, width - 160, height - 160);
+  ctx.fillStyle = "#5b21b6";
+  ctx.fillRect(140, 140, width - 280, 12);
+
+  ctx.fillStyle = "#111827";
+  ctx.textAlign = "left";
+  ctx.font = "bold 54px 'Nunito', sans-serif";
+  ctx.fillText("FORMACIÓN DEL JOVEN Y ADULTO SCOUT", 180, 260);
+
+  ctx.font = "700 34px 'Inter', sans-serif";
+  ctx.fillText("La Asociación de Scouts de Venezuela", 180, 330);
+
+  ctx.font = "600 26px 'Inter', sans-serif";
+  ctx.fillText("Certifica que", 180, 400);
+
+  ctx.font = "bold 64px 'Nunito', sans-serif";
+  ctx.fillText(name, 180, 490);
+
+  ctx.font = "600 26px 'Inter', sans-serif";
+  ctx.fillText("Ha aprobado el curso de", 180, 560);
+
+  ctx.font = "bold 58px 'Nunito', sans-serif";
+  ctx.fillText(courseTitle, 180, 650);
+
+  ctx.font = "500 24px 'Inter', sans-serif";
+  ctx.fillStyle = "#4b5563";
+  ctx.fillText(`Emitido el ${issueDate}`, 180, 730);
+
+  ctx.strokeStyle = "rgba(91, 33, 182, 0.35)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(180, 880);
+  ctx.lineTo(620, 880);
+  ctx.moveTo(width - 620, 880);
+  ctx.lineTo(width - 180, 880);
+  ctx.stroke();
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "600 24px 'Inter', sans-serif";
+  ctx.fillText("Fulanito", 180, 920);
+  ctx.fillText("Fulanito", width - 620, 920);
+
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = `${course.title.replace(/\s+/g, "_")}_${name.replace(/\s+/g, "_")}.png`;
+  link.click();
+}
+
 // ─── COMPONENTES AUXILIARES DEL ESTUDIANTE (CONSERVAN TU DISEÑO EXACTO) ───────
 function MetricCard({ icon, value, label, color, bg }: { icon: React.ReactNode; value: string; label: string; color: string; bg: string }) {
   return (
@@ -304,7 +368,7 @@ function CourseDetailScreen({ course, onSelectModule, onBack }: { course: Course
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowCertificate(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-colors">Cerrar</button>
-              <button onClick={() => alert("Descargando credencial en formato PDF...")} className="flex-1 py-3 text-white font-bold rounded-xl text-xs transition-all hover:opacity-90 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}><Download className="w-4 h-4" /> Guardar PDF</button>
+              <button onClick={() => { if (selectedCourse) downloadCertificateImage(userProfile, selectedCourse); }} className="flex-1 py-3 text-white font-bold rounded-xl text-xs transition-all hover:opacity-90 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}><Download className="w-4 h-4" /> Descargar certificado</button>
             </div>
           </div>
         </div>
