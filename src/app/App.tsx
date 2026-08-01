@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import {
   Home, BookOpen, BarChart2, Award, Users, Bell, User, LogIn,
   ChevronRight, TrendingUp, UserPlus, CheckCircle, Star, Lock,
@@ -60,6 +60,49 @@ interface Course {
   modules: ModuleData[];
 }
 
+function parseContentBlocks(value: unknown): ContentBlock[] {
+  if (Array.isArray(value)) {
+    return value.map((block: any) => ({
+      type: block?.type === "image" || block?.type === "video" ? block.type : "text",
+      content: typeof block?.content === "string" ? block.content : "",
+      caption: typeof block?.caption === "string" ? block.caption : ""
+    })).filter((block) => block.content.trim() || block.caption?.trim());
+  }
+  return [];
+}
+
+function parseDurationMinutes(duration: string) {
+  const normalized = duration.toLowerCase();
+  if (normalized.includes("hora") || normalized.includes("hr") || normalized.includes("h")) {
+    const number = Number(normalized.replace(/[^0-9.]/g, ""));
+    return Number.isFinite(number) ? Math.round(number * 60) : 60;
+  }
+  const minutes = Number(normalized.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(minutes) ? minutes : 0;
+}
+
+function getVideoEmbedUrl(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      if (url.hostname.includes("youtube.com")) {
+        const videoId = url.searchParams.get("v");
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : trimmed;
+      }
+      if (url.hostname.includes("youtu.be")) {
+        const [, videoId] = url.pathname.split("/");
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : trimmed;
+      }
+      return trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+  return `https://www.youtube.com/embed/${trimmed}`;
+}
+
 // ─── COMPONENTES AUXILIARES DEL ESTUDIANTE (CONSERVAN TU DISEÑO EXACTO) ───────
 function MetricCard({ icon, value, label, color, bg }: { icon: React.ReactNode; value: string; label: string; color: string; bg: string }) {
   return (
@@ -77,6 +120,12 @@ function MetricCard({ icon, value, label, color, bg }: { icon: React.ReactNode; 
 
 function UserDashboard({ userProfile, courses, onSelectCourse, onNavigate }: { userProfile: any; courses: Course[]; onSelectCourse: (c: Course) => void; onNavigate: (s: Screen) => void }) {
   const activeCourses = courses.slice(0, 2);
+  const totalModules = courses.reduce((sum, course) => sum + (course.modules?.length || 0), 0);
+  const completedModules = courses.reduce((sum, course) => sum + (course.modules?.filter((module) => module.completed).length || 0), 0);
+  const totalMinutes = courses.reduce((sum, course) => sum + course.modules.reduce((moduleSum, module) => moduleSum + parseDurationMinutes(module.duration), 0), 0);
+  const progressValue = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+  const hoursLabel = totalMinutes > 0 ? `${(totalMinutes / 60).toFixed(1)}h` : "0h";
+
   return (
     <div className="p-5 space-y-6 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
       <div className="bg-gradient-to-br from-[#1d1048] to-[#3b1d82] rounded-[28px] p-6 text-white relative overflow-hidden shadow-lg border border-purple-500/10">
@@ -89,10 +138,10 @@ function UserDashboard({ userProfile, courses, onSelectCourse, onNavigate }: { u
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <MetricCard icon={<Award className="w-5 h-5" />} value="12" label="Insignias" color="#7c3aed" bg="#f3f0ff" />
-        <MetricCard icon={<BookOpen className="w-5 h-5" />} value={courses.length.toString()} label="Cursos Totales" color="#0ea5e9" bg="#e0f2fe" />
-        <MetricCard icon={<Clock className="w-5 h-5" />} value="4.5h" label="Horas Aula" color="#16a34a" bg="#dcfce7" />
-        <MetricCard icon={<Trophy className="w-5 h-5" />} value="850" label="Puntos Progresión" color="#ea580c" bg="#ffedd5" />
+        <MetricCard icon={<Award className="w-5 h-5" />} value={courses.length.toString()} label="Insignias Disponibles" color="#7c3aed" bg="#f3f0ff" />
+        <MetricCard icon={<BookOpen className="w-5 h-5" />} value={totalModules.toString()} label="Módulos Activos" color="#0ea5e9" bg="#e0f2fe" />
+        <MetricCard icon={<Clock className="w-5 h-5" />} value={hoursLabel} label="Horas Aula" color="#16a34a" bg="#dcfce7" />
+        <MetricCard icon={<Trophy className="w-5 h-5" />} value={`${progressValue}%`} label="Progreso Real" color="#ea580c" bg="#ffedd5" />
       </div>
 
       <div className="space-y-4">
@@ -136,7 +185,10 @@ function UserDashboard({ userProfile, courses, onSelectCourse, onNavigate }: { u
 
 function CatalogoScreen({ courses, onSelectCourse }: { courses: Course[]; onSelectCourse: (c: Course) => void }) {
   const [search, setSearch] = useState("");
-  const filtered = courses.filter(c => c.title.toLowerCase().includes(search.toLowerCase()) || c.category.toLowerCase().includes(search.toLowerCase()));
+  const filtered = useMemo(() => courses.filter((course) => {
+    const term = search.toLowerCase();
+    return course.title.toLowerCase().includes(term) || course.category.toLowerCase().includes(term) || course.description.toLowerCase().includes(term);
+  }), [courses, search]);
 
   return (
     <div className="p-5 space-y-5 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -293,9 +345,15 @@ function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => vo
             {module.content?.map((block, i) => (
               <div key={i} className="space-y-2">
                 {block.type === "text" && <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{block.content}</p>}
-                {block.type === "video" && (
+                {block.type === "image" && block.content && (
+                  <div className="my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                    <img src={block.content} alt={block.caption || module.title} className="w-full max-h-96 object-cover" />
+                    {block.caption && <p className="px-3 py-2 text-[11px] text-gray-500">{block.caption}</p>}
+                  </div>
+                )}
+                {block.type === "video" && block.content && (
                   <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-inner my-4">
-                    <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${block.content}`} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+                    <iframe className="w-full h-full" src={getVideoEmbedUrl(block.content)} title="Video del módulo" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
                   </div>
                 )}
               </div>
@@ -345,8 +403,89 @@ function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => vo
   );
 }
 
+function ProfileScreen({ profile, onSave, onCancel }: { profile: any; onSave: (profile: any) => void; onCancel: () => void }) {
+  const [name, setName] = useState(profile?.name || "");
+  const [avatar, setAvatar] = useState(profile?.avatar || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(profile?.name || "");
+    setAvatar(profile?.avatar || "");
+  }, [profile]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!profile?.id) return;
+
+    setSaving(true);
+    const nextAvatar = (avatar || name || "S").trim().slice(0, 2).toUpperCase();
+    const { data, error } = await supabase
+      .from("perfiles")
+      .update({
+        name: name.trim(),
+        avatar: nextAvatar,
+      })
+      .eq("id", profile.id)
+      .select("*")
+      .single();
+
+    setSaving(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    onSave({ ...profile, ...data, name: data?.name || name.trim(), avatar: data?.avatar || nextAvatar });
+  }
+
+  return (
+    <div className="p-5 space-y-5 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
+      <div className="bg-white rounded-2xl border p-5 space-y-3" style={{ borderColor: "rgba(91,33,182,0.06)" }}>
+        <div>
+          <p className="text-xs font-bold text-purple-500 uppercase tracking-wider">Tu identidad scout</p>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight" style={{ fontFamily: "Nunito, sans-serif" }}>Editar perfil</h2>
+          <p className="text-xs text-gray-500 mt-1">Actualiza tu nombre y la inicial que aparece en la plataforma.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Nombre</label>
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border rounded-xl text-sm"
+              placeholder="Tu nombre"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Avatar / Inicial</label>
+            <input
+              value={avatar}
+              onChange={(e) => setAvatar(e.target.value)}
+              className="w-full px-3 py-2 border rounded-xl text-sm"
+              placeholder="Ej: JS"
+              maxLength={2}
+            />
+          </div>
+          <div className="rounded-xl bg-purple-50/70 border border-purple-100 p-3 text-[11px] text-purple-700">
+            <strong>Nota:</strong> solo puedes editar tu información personal. El rol y la pertenencia del equipo se mantienen administrados.
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all">Cancelar</button>
+            <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL DE APLICACIÓN LOGUEADA ─────────────────────────────
-function MainApp({ userProfile, onLogout }: { userProfile: any; onLogout: () => void }) {
+function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any; onLogout: () => void; onProfileUpdated: (profile: any) => void }) {
   const [screen, setScreen] = useState<Screen>(userProfile.role === "admin" ? "dashboard" : "dashboard");
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -361,8 +500,8 @@ function MainApp({ userProfile, onLogout }: { userProfile: any; onLogout: () => 
           id: c.id,
           title: c.title,
           category: c.category,
-          rating: Number(c.rating) || 5.0,
-          reviews: c.reviews || 0,
+          rating: Number(c.rating) || 0,
+          reviews: Number(c.reviews) || 0,
           badge: c.badge,
           badgeColor: c.badge_color || "bg-violet-100 text-violet-700",
           description: c.description,
@@ -372,16 +511,16 @@ function MainApp({ userProfile, onLogout }: { userProfile: any; onLogout: () => 
             id: m.id,
             title: m.title,
             duration: m.duration,
-            content: typeof m.content === "string" ? JSON.parse(m.content) : m.content,
-            quiz: typeof m.quiz === "string" ? JSON.parse(m.quiz) : m.quiz,
+            content: parseContentBlocks(typeof m.content === "string" ? JSON.parse(m.content) : m.content),
+            quiz: typeof m.quiz === "string" ? JSON.parse(m.quiz) : (m.quiz || []),
             completed: false
           }))
         }));
         setCourses(formatted);
       }
     }
-    loadData();
-  }, [screen]); // Se refresca de manera inteligente al cambiar de pantallas para ver cambios del CRUD
+    void loadData();
+  }, [screen]);
 
   const handleSelectCourse = (course: Course) => {
     setSelectedCourse(course);
@@ -420,6 +559,7 @@ function MainApp({ userProfile, onLogout }: { userProfile: any; onLogout: () => 
           {screen === "dashboard" && userProfile.role === "user" && <UserDashboard userProfile={userProfile} courses={courses} onSelectCourse={handleSelectCourse} onNavigate={setScreen} />}
           {screen === "dashboard" && userProfile.role === "admin" && <AdminDashboard />}
           {screen === "catalogo" && <CatalogoScreen courses={courses} onSelectCourse={handleSelectCourse} />}
+          {screen === "perfil" && <ProfileScreen profile={userProfile} onSave={(updatedProfile) => { onProfileUpdated(updatedProfile); setScreen("dashboard"); }} onCancel={() => setScreen("dashboard")} />}
           {screen === "course-detail" && selectedCourse && <CourseDetailScreen course={selectedCourse} onSelectModule={handleSelectModule} onBack={() => setScreen("catalogo")} />}
           {screen === "module-viewer" && selectedModule && <ModuleViewer module={selectedModule} onBack={() => setScreen("course-detail")} />}
           {screen === "users" && userProfile.role === "admin" && <UsersScreen />}
@@ -483,5 +623,5 @@ export default function App() {
   }
 
   // Si pasa la validación, ingresa al Aula Virtual con su rol e identidad correspondiente
-  return <MainApp userProfile={profile} onLogout={() => supabase.auth.signOut()} />;
+  return <MainApp userProfile={profile} onLogout={() => supabase.auth.signOut()} onProfileUpdated={(updatedProfile) => setProfile(updatedProfile)} />;
 }
