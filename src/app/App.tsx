@@ -300,8 +300,9 @@ function CatalogoScreen({ courses, onSelectCourse }: { courses: Course[]; onSele
   );
 }
 
-function CourseDetailScreen({ course, onSelectModule, onBack }: { course: Course; onSelectModule: (m: ModuleData) => void; onBack: () => void }) {
+function CourseDetailScreen({ course, userProfile, onSelectModule, onBack }: { course: Course; userProfile: any; onSelectModule: (m: ModuleData) => void; onBack: () => void }) {
   const [showCertificate, setShowCertificate] = useState(false);
+  const allCompleted = course.modules.every((mod) => mod.completed);
 
   return (
     <div className="p-5 space-y-6 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -322,7 +323,7 @@ function CourseDetailScreen({ course, onSelectModule, onBack }: { course: Course
             <h3 className="font-black text-gray-900 text-base tracking-tight" style={{ fontFamily: "Nunito, sans-serif" }}>Módulos del Plan de Adelanto</h3>
             <div className="space-y-2.5">
               {course.modules?.map((mod, idx) => (
-                <div key={mod.id} onClick={() => onSelectModule(mod)} className="bg-white rounded-xl border p-4 flex items-center justify-between cursor-pointer hover:border-purple-300 hover:shadow-sm transition-all group" style={{ borderColor: "rgba(91,33,182,0.06)" }}>
+                <div key={mod.id} onClick={() => onSelectModule(mod)} className={`rounded-xl border p-4 flex items-center justify-between cursor-pointer hover:shadow-sm transition-all group ${mod.completed ? "bg-emerald-50 border-emerald-200" : "bg-white"}`} style={{ borderColor: mod.completed ? "rgba(16,185,129,0.2)" : "rgba(91,33,182,0.06)" }}>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-mono text-xs font-black">{idx + 1}</div>
                     <div>
@@ -371,7 +372,7 @@ function CourseDetailScreen({ course, onSelectModule, onBack }: { course: Course
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowCertificate(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-colors">Cerrar</button>
-              <button onClick={() => { if (selectedCourse) downloadCertificateImage(userProfile, selectedCourse); }} className="flex-1 py-3 text-white font-bold rounded-xl text-xs transition-all hover:opacity-90 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}><Download className="w-4 h-4" /> Descargar certificado</button>
+              <button onClick={() => downloadCertificateImage(userProfile, course)} className="flex-1 py-3 text-white font-bold rounded-xl text-xs transition-all hover:opacity-90 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}><Download className="w-4 h-4" /> Descargar certificado</button>
             </div>
           </div>
         </div>
@@ -380,12 +381,14 @@ function CourseDetailScreen({ course, onSelectModule, onBack }: { course: Course
   );
 }
 
-function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => void }) {
+function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleData; course: Course; onBack: () => void; onComplete: (moduleId: number) => void }) {
   const [quizActive, setQuizActive] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [quizScore, setQuizScore] = useState(0);
+  const [lastAnswerWasCorrect, setLastAnswerWasCorrect] = useState(false);
+
+  const isLastQuestion = currentQuestionIndex === module.quiz.length - 1;
 
   const handleNextQuestion = () => {
     setSelectedOption(null);
@@ -394,7 +397,9 @@ function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => vo
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
       setQuizActive(false);
-      alert(`¡Cuestionario terminado! Puntuación final guardada.`);
+      setCurrentQuestionIndex(0);
+      setLastAnswerWasCorrect(false);
+      alert("¡Cuestionario terminado! Buen trabajo.");
     }
   };
 
@@ -414,7 +419,7 @@ function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => vo
                 {block.type === "text" && <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{block.content}</p>}
                 {block.type === "image" && block.content && (
                   <div className="my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                    <img src={block.content} alt={block.caption || module.title} className="w-full max-h-96 object-cover" />
+                    <img src={block.content} alt={block.caption || module.title} className="w-full max-h-[480px] object-contain" />
                     {block.caption && <p className="px-3 py-2 text-[11px] text-gray-500">{block.caption}</p>}
                   </div>
                 )}
@@ -464,8 +469,32 @@ function ModuleViewer({ module, onBack }: { module: ModuleData; onBack: () => vo
                   <strong>Explicación Scout:</strong> {module.quiz[currentQuestionIndex].explanation}
                 </div>
               )}
+              {quizSubmitted && lastAnswerWasCorrect && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                  <p className="font-bold">¡Muy bien, lo hiciste bien!</p>
+                  {isLastQuestion ? (
+                    <p className="mt-1">Has completado el módulo y tu progreso se guardó como aprobado.</p>
+                  ) : (
+                    <p className="mt-1">Continúa con la siguiente pregunta para terminar el módulo.</p>
+                  )}
+                </div>
+              )}
+              {quizSubmitted && !lastAnswerWasCorrect && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                  <p className="font-bold">Respuesta incorrecta.</p>
+                  <p className="mt-1">Revisa la explicación y vuelve a intentarlo en la siguiente pregunta.</p>
+                </div>
+              )}
               {!quizSubmitted ? (
-                <button disabled={selectedOption === null} onClick={() => setQuizSubmitted(true)} className="w-full py-2.5 text-white bg-gray-800 font-bold text-xs rounded-xl transition-all disabled:opacity-40">Validar Respuesta</button>
+                <button disabled={selectedOption === null} onClick={() => {
+                  if (selectedOption === null) return;
+                  const isCorrect = selectedOption === module.quiz[currentQuestionIndex].correct;
+                  setQuizSubmitted(true);
+                  setLastAnswerWasCorrect(isCorrect);
+                  if (isCorrect && isLastQuestion) {
+                    onComplete(module.id);
+                  }
+                }} className="w-full py-2.5 text-white bg-gray-800 font-bold text-xs rounded-xl transition-all disabled:opacity-40">Validar Respuesta</button>
               ) : (
                 <button onClick={handleNextQuestion} className="w-full py-2.5 text-white font-bold text-xs rounded-xl transition-all" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>Siguiente Pregunta</button>
               )}
@@ -606,6 +635,27 @@ function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any
     setScreen("module-viewer");
   };
 
+  const handleCompleteModule = (moduleId: number) => {
+    setCourses((prev) => prev.map((course) => {
+      if (course.id !== selectedCourse?.id) return course;
+      return {
+        ...course,
+        modules: course.modules.map((mod) => mod.id === moduleId ? { ...mod, completed: true } : mod)
+      };
+    }));
+
+    if (selectedCourse) {
+      setSelectedCourse({
+        ...selectedCourse,
+        modules: selectedCourse.modules.map((mod) => mod.id === moduleId ? { ...mod, completed: true } : mod)
+      });
+    }
+
+    if (selectedModule?.id === moduleId) {
+      setSelectedModule({ ...selectedModule, completed: true });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#faf9fe] flex flex-col lg:flex-row pb-16 lg:pb-0 selection:bg-purple-200">
      <Sidebar 
@@ -634,8 +684,8 @@ function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any
           {screen === "dashboard" && userProfile.role === "admin" && <AdminDashboard />}
           {screen === "catalogo" && <CatalogoScreen courses={courses} onSelectCourse={handleSelectCourse} />}
           {screen === "perfil" && <ProfileScreen profile={userProfile} onSave={(updatedProfile) => { onProfileUpdated(updatedProfile); setScreen("dashboard"); }} onCancel={() => setScreen("dashboard")} />}
-          {screen === "course-detail" && selectedCourse && <CourseDetailScreen course={selectedCourse} onSelectModule={handleSelectModule} onBack={() => setScreen("catalogo")} />}
-          {screen === "module-viewer" && selectedModule && <ModuleViewer module={selectedModule} onBack={() => setScreen("course-detail")} />}
+          {screen === "course-detail" && selectedCourse && <CourseDetailScreen course={selectedCourse} userProfile={userProfile} onSelectModule={handleSelectModule} onBack={() => setScreen("catalogo")} />}
+          {screen === "module-viewer" && selectedModule && selectedCourse && <ModuleViewer module={selectedModule} course={selectedCourse} onBack={() => setScreen("course-detail")} onComplete={handleCompleteModule} />}
           {screen === "users" && userProfile.role === "admin" && <UsersScreen />}
           {screen === "admin-cursos" && userProfile.role === "admin" && <AdminCursosScreen />}
         </div>
