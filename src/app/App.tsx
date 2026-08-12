@@ -9,6 +9,8 @@ import {
   Video, HelpCircle, RefreshCw,
 } from "lucide-react";
 
+import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "./components/ui/carousel";
+
 // ─── CONEXIÓN CON SUPABASE Y COMPONENTES DE ADMINISTRACIÓN ───────────────────
 import { supabase } from "./lib/supabase";
 import LoginScreen from "./components/LoginScreen";
@@ -32,7 +34,7 @@ interface QuizQuestion {
 }
 
 interface ContentBlock {
-  type: "text" | "image" | "video";
+  type: "text" | "image" | "video" | "slides";
   content: string;
   caption?: string;
 }
@@ -63,7 +65,7 @@ interface Course {
 function parseContentBlocks(value: unknown): ContentBlock[] {
   if (Array.isArray(value)) {
     return value.map((block: any) => ({
-      type: block?.type === "image" || block?.type === "video" ? block.type : "text",
+      type: block?.type === "image" || block?.type === "video" || block?.type === "slides" ? block.type : "text",
       content: typeof block?.content === "string" ? block.content : "",
       caption: typeof block?.caption === "string" ? block.caption : ""
     })).filter((block) => block.content.trim() || block.caption?.trim());
@@ -432,6 +434,53 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
                         <source src={block.content} />
                         Tu navegador no soporta este formato de video.
                       </video>
+                    )}
+                  </div>
+                )}
+                {block.type === "slides" && block.content && (
+                  <div className="my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    {/* Si el contenido es un array JSON de imágenes, renderizar carrusel */}
+                    {block.content.trim().startsWith("[") ? (
+                      (() => {
+                        try {
+                          const imgs = JSON.parse(block.content);
+                          if (Array.isArray(imgs) && imgs.length > 0) {
+                            return (
+                              <div>
+                                <Carousel>
+                                  <CarouselContent className="flex">
+                                    {imgs.map((src: string, idx: number) => (
+                                      <CarouselItem key={idx} className="p-2">
+                                        <div className="rounded-xl overflow-hidden bg-white">
+                                          <img src={src} alt={`Slide ${idx + 1}`} className="w-full h-64 object-contain" />
+                                        </div>
+                                      </CarouselItem>
+                                    ))}
+                                  </CarouselContent>
+                                  <CarouselPrevious />
+                                  <CarouselNext />
+                                </Carousel>
+                                {block.caption && <p className="px-3 py-2 text-[11px] text-gray-500">{block.caption}</p>}
+                              </div>
+                            );
+                          }
+                        } catch (e) {
+                          /* fallthrough to office viewer below */
+                        }
+                        return (
+                          <div className="aspect-video rounded-xl overflow-hidden">
+                            <iframe className="w-full h-96" src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(block.content)}`} frameBorder="0"></iframe>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div>
+                        <div className="aspect-video rounded-xl overflow-hidden">
+                          <iframe className="w-full h-96" src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(block.content)}`} frameBorder="0"></iframe>
+                        </div>
+                        {block.caption && <p className="px-3 py-2 text-[11px] text-gray-500">{block.caption}</p>}
+                        <div className="text-xs text-gray-500 mt-2">Si el visor no carga, <a href={block.content} target="_blank" rel="noreferrer" className="text-purple-600 underline">abrir en nueva pestaña</a>.</div>
+                      </div>
                     )}
                   </div>
                 )}

@@ -10,7 +10,7 @@ interface QuizItem {
 }
 
 interface ContentBlock {
-  type: "text" | "image" | "video";
+  type: "text" | "image" | "video" | "slides";
   content: string;
   caption?: string;
 }
@@ -34,7 +34,7 @@ function createDefaultModule(): ModuleForm {
 function normalizeBlocks(blocks: ContentBlock[]) {
   return blocks
     .map((block) => ({
-      type: block.type === "image" || block.type === "video" ? block.type : "text",
+      type: block.type === "image" || block.type === "video" || block.type === "slides" ? block.type : "text",
       content: block.content || "",
       caption: block.caption || ""
     }))
@@ -431,6 +431,7 @@ export function AdminCursosScreen() {
                               <option value="text">Texto</option>
                               <option value="image">Imagen</option>
                               <option value="video">Video</option>
+                              <option value="slides">Diapositivas (PowerPoint)</option>
                             </select>
                             {moduleForm.blocks.length > 1 && (
                               <button type="button" onClick={() => removeBlockFromModuleForm(index)} className="text-xs text-red-600">Eliminar</button>
@@ -475,6 +476,24 @@ export function AdminCursosScreen() {
                               Arrastra un video aquí o <label className="text-purple-600 underline cursor-pointer"><input type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadBlockFile(index, e.target.files[0])} />selecciona un archivo</label>
                               {uploadingBlockIndex === index && <div className="text-[10px] text-gray-400 mt-2">Subiendo archivo...</div>}
                             </div>
+                          </div>
+                        )}
+                        {block.type === "slides" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500"><FileText className="w-3.5 h-3.5" /> Diapositivas / PowerPoint</div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <input type="text" value={block.content} onChange={(e) => updateModuleBlock(index, "content", e.target.value)} placeholder="URL pública de PowerPoint (.pptx) o URL de presentación" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                              <input type="text" value={block.caption || ""} onChange={(e) => updateModuleBlock(index, "caption", e.target.value)} placeholder="Descripción (opcional)" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                            </div>
+                            <div
+                              onDragOver={handleBlockDragOver}
+                              onDrop={(e) => handleBlockDrop(index, e)}
+                              className="rounded-2xl border border-dashed border-gray-300 bg-white/90 p-3 text-xs text-gray-500 text-center cursor-pointer"
+                            >
+                              Arrastra un archivo PowerPoint (.pptx/.ppt) aquí o <label className="text-purple-600 underline cursor-pointer"><input type="file" accept=".ppt,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint" className="hidden" onChange={(e) => e.target.files?.[0] && uploadBlockFile(index, e.target.files[0])} />selecciona un archivo</label>
+                              {uploadingBlockIndex === index && <div className="text-[10px] text-gray-400 mt-2">Subiendo archivo...</div>}
+                            </div>
+                            <div className="text-[11px] text-gray-500">Nota: las presentaciones se visualizarán mediante un visor web o, si proporcionas varias imágenes, como carrusel.</div>
                           </div>
                         )}
                       </div>

@@ -12,6 +12,7 @@ export default function Sidebar({ role, currentScreen, onNavigate, onLogout }) {
 
   const adminMenuItems = [
     { id: "dashboard", label: "Dashboard", icon: <BarChart2 className="w-5 h-5" /> },
+    { id: "catalogo", label: "Cursos", icon: <BookOpen className="w-5 h-5" /> },
     { id: "admin-cursos", label: "Gestionar Cursos", icon: <BookOpen className="w-5 h-5" /> },
     { id: "users", label: "Usuarios", icon: <Users className="w-5 h-5" /> },
     { id: "perfil", label: "Perfil", icon: <User className="w-5 h-5" /> },
