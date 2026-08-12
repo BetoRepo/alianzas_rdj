@@ -10,6 +10,29 @@ import {
 } from "lucide-react";
 
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "./components/ui/carousel";
+import { getFileUrl } from "./lib/supabase";
+
+function AsyncIframe({ srcValue }: { srcValue: string }) {
+  const [url, setUrl] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const resolved = await getFileUrl(srcValue, 3600);
+        if (!mounted) return;
+        setUrl(resolved || srcValue);
+      } catch (e) {
+        if (mounted) setUrl(srcValue);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [srcValue]);
+
+  if (!url) return <div className="h-96 flex items-center justify-center text-xs text-gray-400">Generando vista...</div>;
+
+  return <iframe className="w-full h-96" src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`} frameBorder="0"></iframe>;
+}
 
 // ─── CONEXIÓN CON SUPABASE Y COMPONENTES DE ADMINISTRACIÓN ───────────────────
 import { supabase } from "./lib/supabase";
@@ -476,7 +499,8 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
                     ) : (
                       <div>
                         <div className="aspect-video rounded-xl overflow-hidden">
-                          <iframe className="w-full h-96" src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(block.content)}`} frameBorder="0"></iframe>
+                          {/* Si block.content no es URL pública, obtener signed URL */}
+                          <AsyncIframe srcValue={block.content} />
                         </div>
                         {block.caption && <p className="px-3 py-2 text-[11px] text-gray-500">{block.caption}</p>}
                         <div className="text-xs text-gray-500 mt-2">Si el visor no carga, <a href={block.content} target="_blank" rel="noreferrer" className="text-purple-600 underline">abrir en nueva pestaña</a>.</div>

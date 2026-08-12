@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, type FormEvent } from "react";
 import { PlusCircle, Trash2, Star, X, Image as ImageIcon, Video as VideoIcon, FileText } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { supabase, DEFAULT_STORAGE_BUCKET } from "../lib/supabase";
 
 interface QuizItem {
   question: string;
@@ -225,7 +225,7 @@ export function AdminCursosScreen() {
       return;
     }
 
-    const bucket = "course-media";
+    const bucket = DEFAULT_STORAGE_BUCKET;
     const extension = file.name.split(".").pop() || "";
     const filePath = `courses/${selectedCourseForModules.id}/blocks/${Date.now()}_${blockIndex}.${extension}`;
 
