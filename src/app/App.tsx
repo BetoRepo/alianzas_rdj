@@ -57,7 +57,7 @@ interface QuizQuestion {
 }
 
 interface ContentBlock {
-  type: "text" | "image" | "video" | "slides";
+  type: "text" | "image" | "video" | "slides" | "pdf";
   content: string;
   caption?: string;
 }
@@ -88,7 +88,7 @@ interface Course {
 function parseContentBlocks(value: unknown): ContentBlock[] {
   if (Array.isArray(value)) {
     return value.map((block: any) => ({
-      type: block?.type === "image" || block?.type === "video" || block?.type === "slides" ? block.type : "text",
+      type: block?.type === "image" || block?.type === "video" || block?.type === "slides" || block?.type === "pdf" ? block.type : "text",
       content: typeof block?.content === "string" ? block.content : "",
       caption: typeof block?.caption === "string" ? block.caption : ""
     })).filter((block) => block.content.trim() || block.caption?.trim());
@@ -462,7 +462,6 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
                 )}
                 {block.type === "slides" && block.content && (
                   <div className="my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-3">
-                    {/* Si el contenido es un array JSON de imágenes, renderizar carrusel */}
                     {block.content.trim().startsWith("[") ? (
                       (() => {
                         try {
@@ -488,7 +487,7 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
                             );
                           }
                         } catch (e) {
-                          /* fallthrough to office viewer below */
+                          // fallthrough to office viewer
                         }
                         return (
                           <div className="aspect-video rounded-xl overflow-hidden">
@@ -499,13 +498,27 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
                     ) : (
                       <div>
                         <div className="aspect-video rounded-xl overflow-hidden">
-                          {/* Si block.content no es URL pública, obtener signed URL */}
                           <AsyncIframe srcValue={block.content} />
                         </div>
                         {block.caption && <p className="px-3 py-2 text-[11px] text-gray-500">{block.caption}</p>}
                         <div className="text-xs text-gray-500 mt-2">Si el visor no carga, <a href={block.content} target="_blank" rel="noreferrer" className="text-purple-600 underline">abrir en nueva pestaña</a>.</div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {block.type === "pdf" && block.content && (
+                  <div className="my-4 rounded-2xl border border-gray-200 bg-gray-50 p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
+                        <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">PDF</div>
+                        <span>{block.caption || "Documento PDF"}</span>
+                      </div>
+                      <a href={block.content} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-purple-600 hover:text-purple-800 underline">Abrir en otra pestaña</a>
+                    </div>
+                    <div className="overflow-hidden rounded-xl bg-white border border-gray-200">
+                      <embed src={block.content} type="application/pdf" className="w-full h-[620px] block" title={block.caption || "Vista previa del PDF"} />
+                    </div>
                   </div>
                 )}
               </div>

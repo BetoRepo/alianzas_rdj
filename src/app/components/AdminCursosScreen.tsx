@@ -10,7 +10,7 @@ interface QuizItem {
 }
 
 interface ContentBlock {
-  type: "text" | "image" | "video" | "slides";
+  type: "text" | "image" | "video" | "slides" | "pdf";
   content: string;
   caption?: string;
 }
@@ -34,7 +34,7 @@ function createDefaultModule(): ModuleForm {
 function normalizeBlocks(blocks: ContentBlock[]) {
   return blocks
     .map((block) => ({
-      type: block.type === "image" || block.type === "video" || block.type === "slides" ? block.type : "text",
+      type: block.type === "image" || block.type === "video" || block.type === "slides" || block.type === "pdf" ? block.type : "text",
       content: block.content || "",
       caption: block.caption || ""
     }))
@@ -68,6 +68,7 @@ export function AdminCursosScreen() {
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleForm, setModuleForm] = useState<ModuleForm>(createDefaultModule());
   const [uploadingBlockIndex, setUploadingBlockIndex] = useState<number | null>(null);
+  const [editingModuleId, setEditingModuleId] = useState<number | null>(null);
 
   function resetCourseForm() {
     setTitle("");
@@ -161,6 +162,7 @@ export function AdminCursosScreen() {
   function openModuleManager(course: any) {
     setSelectedCourseForModules(course);
     setModuleForm(createDefaultModule());
+    setEditingModuleId(null);
     void fetchModules(course.id);
   }
 
@@ -168,27 +170,69 @@ export function AdminCursosScreen() {
     setSelectedCourseForModules(null);
     setCourseModules([]);
     setModuleForm(createDefaultModule());
+    setEditingModuleId(null);
+  }
+
+  function openEditModuleForm(module: any) {
+    let parsedContent: ContentBlock[] = [];
+    try {
+      parsedContent = Array.isArray(JSON.parse(module.content || "[]")) ? JSON.parse(module.content || "[]") : [];
+    } catch {
+      parsedContent = [];
+    }
+
+    let parsedQuiz: QuizItem[] = [];
+    try {
+      parsedQuiz = Array.isArray(JSON.parse(module.quiz || "[]")) ? JSON.parse(module.quiz || "[]") : [];
+    } catch {
+      parsedQuiz = [];
+    }
+
+    setEditingModuleId(module.id);
+    setModuleForm({
+      title: module.title || "",
+      duration: module.duration || "",
+      blocks: parsedContent.length > 0 ? parsedContent.map((block: any) => ({
+        type: block?.type === "image" || block?.type === "video" || block?.type === "slides" || block?.type === "pdf" ? block.type : "text",
+        content: typeof block?.content === "string" ? block.content : "",
+        caption: typeof block?.caption === "string" ? block.caption : ""
+      })) : [{ type: "text", content: "", caption: "" }],
+      quiz: parsedQuiz.length > 0 ? parsedQuiz.map((question: any) => ({
+        question: question?.question || "",
+        options: Array.isArray(question?.options) ? question.options.map((opt: any) => String(opt || "")) : ["", "", "", ""],
+        correct: Number(question?.correct || 0),
+        explanation: question?.explanation || ""
+      })) : [{ question: "", options: ["", "", "", ""], correct: 0, explanation: "" }]
+    });
   }
 
   async function handleCreateModule(e: FormEvent) {
     e.preventDefault();
     if (!selectedCourseForModules) return;
 
-    const { error } = await supabase.from("modulos").insert([{
+    const payload = {
       curso_id: selectedCourseForModules.id,
       title: moduleForm.title,
       duration: moduleForm.duration,
       content: JSON.stringify(normalizeBlocks(moduleForm.blocks)),
       quiz: JSON.stringify(buildQuizPayload(moduleForm.quiz)),
-      orden: courseModules.length + 1
-    }]);
+      orden: editingModuleId ? courseModules.findIndex((m) => m.id === editingModuleId) + 1 || courseModules.length + 1 : courseModules.length + 1
+    };
 
-    if (error) {
-      alert(error.message);
+    let result;
+    if (editingModuleId) {
+      result = await supabase.from("modulos").update(payload).eq("id", editingModuleId);
+    } else {
+      result = await supabase.from("modulos").insert([payload]);
+    }
+
+    if (result.error) {
+      alert(result.error.message);
       return;
     }
 
     setModuleForm(createDefaultModule());
+    setEditingModuleId(null);
     await fetchModules(selectedCourseForModules.id);
     await fetchCourses();
   }
@@ -396,7 +440,10 @@ export function AdminCursosScreen() {
                             <div className="text-sm font-bold text-gray-800">{mod.title}</div>
                             <div className="text-xs text-gray-400">{mod.duration}</div>
                           </div>
-                          <button onClick={() => void handleDeleteModule(mod.id)} className="text-xs font-semibold text-red-600 hover:text-red-800">Eliminar</button>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openEditModuleForm(mod)} className="text-xs font-semibold text-purple-600 hover:text-purple-800">Editar</button>
+                            <button onClick={() => void handleDeleteModule(mod.id)} className="text-xs font-semibold text-red-600 hover:text-red-800">Eliminar</button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -404,7 +451,7 @@ export function AdminCursosScreen() {
                 </div>
 
                 <form onSubmit={handleCreateModule} className="space-y-4 bg-white rounded-3xl p-4 border border-gray-200">
-                  <h3 className="text-sm font-black text-gray-900">Agregar módulo nuevo</h3>
+                  <h3 className="text-sm font-black text-gray-900">{editingModuleId ? "Editar módulo" : "Agregar módulo nuevo"}</h3>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 mb-1">Título del módulo</label>
@@ -432,6 +479,7 @@ export function AdminCursosScreen() {
                               <option value="image">Imagen</option>
                               <option value="video">Video</option>
                               <option value="slides">Diapositivas (PowerPoint)</option>
+                              <option value="pdf">PDF</option>
                             </select>
                             {moduleForm.blocks.length > 1 && (
                               <button type="button" onClick={() => removeBlockFromModuleForm(index)} className="text-xs text-red-600">Eliminar</button>
@@ -496,6 +544,25 @@ export function AdminCursosScreen() {
                             <div className="text-[11px] text-gray-500">Nota: las presentaciones se visualizarán mediante un visor web o, si proporcionas varias imágenes, como carrusel.</div>
                           </div>
                         )}
+
+                        {block.type === "pdf" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500"><FileText className="w-3.5 h-3.5" /> Documento PDF</div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <input type="text" value={block.content} onChange={(e) => updateModuleBlock(index, "content", e.target.value)} placeholder="URL pública del PDF o archivo subido" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                              <input type="text" value={block.caption || ""} onChange={(e) => updateModuleBlock(index, "caption", e.target.value)} placeholder="Descripción (opcional)" className="w-full px-3 py-2 border rounded-xl text-sm" />
+                            </div>
+                            <div
+                              onDragOver={handleBlockDragOver}
+                              onDrop={(e) => handleBlockDrop(index, e)}
+                              className="rounded-2xl border border-dashed border-gray-300 bg-white/90 p-3 text-xs text-gray-500 text-center cursor-pointer"
+                            >
+                              Arrastra un PDF aquí o <label className="text-purple-600 underline cursor-pointer"><input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadBlockFile(index, e.target.files[0])} />selecciona un archivo</label>
+                              {uploadingBlockIndex === index && <div className="text-[10px] text-gray-400 mt-2">Subiendo archivo...</div>}
+                            </div>
+                            <div className="text-[11px] text-gray-500">Ajuste: el PDF se abrirá dentro del módulo con visor embebido.</div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -533,8 +600,13 @@ export function AdminCursosScreen() {
                   </div>
 
                   <button type="submit" className="w-full py-3 rounded-xl font-bold text-white text-sm" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
-                    Crear Módulo
+                    {editingModuleId ? "Guardar Cambios" : "Crear Módulo"}
                   </button>
+                  {editingModuleId && (
+                    <button type="button" onClick={() => { setEditingModuleId(null); setModuleForm(createDefaultModule()); }} className="w-full py-2.5 rounded-xl font-bold text-gray-700 text-sm bg-gray-100 hover:bg-gray-200 transition-all">
+                      Cancelar edición
+                    </button>
+                  )}
                 </form>
               </div>
             </div>
