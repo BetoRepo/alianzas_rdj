@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { LogIn, UserPlus, Mail, Lock, User } from "lucide-react";
-import { supabase } from "../lib/supabase"; // Asegúrate de que la ruta a tu archivo de supabase sea correcta
+import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft } from "lucide-react";
+import { supabase } from "../lib/supabase"; // Asegúrate de que la ruta sea correcta
 
 export default function LoginScreen({ onLogin }) {
-  const [isRegistering, setIsRegistering] = useState(false);
+  // Modos posibles: "login" | "register" | "forgot"
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -11,11 +12,33 @@ export default function LoginScreen({ onLogin }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // ─── OPCIÓN 1: RESTABLECER CONTRASEÑA ───
+    if (mode === "forgot") {
+      if (!email) return alert("Por favor introduce tu correo electrónico.");
+      setLoading(true);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`, // Cambia esta URL si usas un enlace específico
+      });
+
+      setLoading(false);
+
+      if (error) {
+        alert("Error al enviar el correo: " + error.message);
+      } else {
+        alert("¡Enlace enviado! Revisa tu bandeja de entrada o spam para restablecer tu contraseña.");
+        setMode("login");
+      }
+      return;
+    }
+
+    // Validación base para Login y Registro
     if (!email || !password) return alert("Por favor completa los campos.");
     setLoading(true);
 
-    if (isRegistering) {
-      // ─── REGISTRO DE NUEVO USUARIO ───
+    if (mode === "register") {
+      // ─── OPCIÓN 2: REGISTRO DE NUEVO USUARIO ───
       if (!name) {
         alert("Por favor introduce tu nombre.");
         setLoading(false);
@@ -39,7 +62,7 @@ export default function LoginScreen({ onLogin }) {
           id: authData.user.id,
           name,
           email,
-          role: "user", // Por defecto todos entran como Scouts/Alumnos
+          role: "user",
           role_label: "Scout de Tropa",
           avatar: initials || "ST"
         }]);
@@ -48,11 +71,11 @@ export default function LoginScreen({ onLogin }) {
           alert("Usuario creado en Auth, pero hubo un problema al guardar el perfil: " + profileError.message);
         } else {
           alert("¡Cuenta Scout creada con éxito! Ya puedes iniciar sesión.");
-          setIsRegistering(false);
+          setMode("login");
         }
       }
     } else {
-      // ─── INICIO DE SESIÓN DE USUARIO EXISITENTE ───
+      // ─── OPCIÓN 3: INICIO DE SESIÓN DE USUARIO EXISTENTE ───
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -61,7 +84,6 @@ export default function LoginScreen({ onLogin }) {
       if (error) {
         alert("Error de credenciales: " + error.message);
       } else if (data?.user) {
-        // Al iniciar sesión de forma exitosa, notificamos al App.js para que cargue el dashboard
         onLogin();
       }
     }
@@ -87,16 +109,25 @@ export default function LoginScreen({ onLogin }) {
               <span className="text-white font-black text-xl tracking-tighter" style={{ fontFamily: "Nunito, sans-serif" }}>S</span>
             </div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight" style={{ fontFamily: "Nunito, sans-serif" }}>
-              {isRegistering ? "Crear Cuenta Scout" : "Aula Virtual Scout"}
+              {mode === "register" 
+                ? "Crear Cuenta Scout" 
+                : mode === "forgot" 
+                ? "Recuperar Contraseña" 
+                : "Aula Virtual Scout"}
             </h1>
             <p className="text-xs text-gray-400 mt-1 text-center px-4">
-              {isRegistering ? "Únete a la hermandad scout y empieza tu progresión" : "Ingresa tus credenciales para acceder a tus insignias y cursos"}
+              {mode === "register" 
+                ? "Únete a la hermandad scout y empieza tu progresión" 
+                : mode === "forgot"
+                ? "Ingresa tu correo y te enviaremos un enlace de recuperación"
+                : "Ingresa tus credenciales para acceder a tus insignias y cursos"}
             </p>
           </div>
 
           {/* Formulario */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isRegistering && (
+            {/* Campo: Nombre (Solo en Registro) */}
+            {mode === "register" && (
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Nombre Completo</label>
                 <div className="relative flex items-center">
@@ -108,6 +139,7 @@ export default function LoginScreen({ onLogin }) {
               </div>
             )}
 
+            {/* Campo: Email (Visible en todos los modos) */}
             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Correo Electrónico</label>
               <div className="relative flex items-center">
@@ -118,23 +150,37 @@ export default function LoginScreen({ onLogin }) {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Contraseña</label>
-              <div className="relative flex items-center">
-                <Lock className="w-4 h-4 text-gray-400 absolute left-4" />
-                <input required type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
-                       className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
-                       style={{ borderColor: password ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+            {/* Campo: Contraseña (No se muestra en modo 'forgot') */}
+            {mode !== "forgot" && (
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Contraseña</label>
+                  {mode === "login" && (
+                    <button type="button" onClick={() => setMode("forgot")} className="text-xs font-semibold text-purple-600 hover:underline">
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  )}
+                </div>
+                <div className="relative flex items-center">
+                  <Lock className="w-4 h-4 text-gray-400 absolute left-4" />
+                  <input required type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
+                         className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
+                         style={{ borderColor: password ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Botón de Envío */}
+            {/* Botón de Envío Dinámico */}
             <button type="submit" disabled={loading}
                     className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all mt-2 disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
               {loading ? (
                 <span className="animate-pulse">PROCESANDO...</span>
-              ) : isRegistering ? (
+              ) : mode === "forgot" ? (
+                <>
+                  <KeyRound className="w-4 h-4" /> ENVIAR ENLACE DE RECUPERACIÓN
+                </>
+              ) : mode === "register" ? (
                 <>
                   <UserPlus className="w-4 h-4" /> REGISTRARME
                 </>
@@ -148,9 +194,15 @@ export default function LoginScreen({ onLogin }) {
 
           {/* Selector / Switcher de Opción */}
           <div className="mt-6 text-center">
-            <button onClick={() => setIsRegistering(!isRegistering)} className="text-xs font-bold text-purple-600 hover:underline transition-colors">
-              {isRegistering ? "¿Ya tienes una cuenta? Inicia sesión aquí" : "¿No tienes una cuenta? Regístrate e intégrate aquí"}
-            </button>
+            {mode === "forgot" ? (
+              <button onClick={() => setMode("login")} className="inline-flex items-center gap-1 text-xs font-bold text-purple-600 hover:underline transition-colors">
+                <ArrowLeft className="w-3.5 h-3.5" /> Volver al Inicio de Sesión
+              </button>
+            ) : (
+              <button onClick={() => setMode(mode === "login" ? "register" : "login")} className="text-xs font-bold text-purple-600 hover:underline transition-colors">
+                {mode === "register" ? "¿Ya tienes una cuenta? Inicia sesión aquí" : "¿No tienes una cuenta? Regístrate e intégrate aquí"}
+              </button>
+            )}
           </div>
         </div>
       </div>

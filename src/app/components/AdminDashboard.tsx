@@ -12,7 +12,6 @@ export function AdminDashboard() {
       // Cuenta en tiempo real la cantidad exacta de filas en tus tablas
       const { count: usersCount } = await supabase.from("perfiles").select("*", { count: 'exact', head: true });
       const { count: coursesCount } = await supabase.from("cursos").select("*", { count: 'exact', head: true });
-      
       setTotalUsers(usersCount || 0);
       setTotalCourses(coursesCount || 0);
       setLoading(false);
