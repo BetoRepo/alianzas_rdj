@@ -42,7 +42,7 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { UsersScreen } from "./components/UsersScreen";
 import { AdminCursosScreen } from "./components/AdminCursosScreen";
 
-// ─── TYPES (Mantenidos para preservar la estructura si usas extensiones TSX) ─
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 type Role = "admin" | "user";
 type Screen =
   | "login" | "dashboard" | "catalogo" | "perfil"
@@ -195,7 +195,7 @@ function downloadCertificateImage(profile: any, course: Course) {
   document.body.removeChild(link);
 }
 
-// ─── COMPONENTES AUXILIARES DEL ESTUDIANTE (CONSERVAN TU DISEÑO EXACTO) ───────
+// ─── COMPONENTES AUXILIARES DEL ESTUDIANTE ────────────────────────────────────
 function MetricCard({ icon, value, label, color, bg }: { icon: React.ReactNode; value: string; label: string; color: string; bg: string }) {
   return (
     <div className="bg-white rounded-2xl p-4 border flex items-center gap-4 hover:shadow-md transition-all duration-300" style={{ borderColor: "rgba(91,33,182,0.06)" }}>
@@ -327,7 +327,9 @@ function CatalogoScreen({ courses, onSelectCourse }: { courses: Course[]; onSele
 
 function CourseDetailScreen({ course, userProfile, onSelectModule, onBack }: { course: Course; userProfile: any; onSelectModule: (m: ModuleData) => void; onBack: () => void }) {
   const [showCertificate, setShowCertificate] = useState(false);
-  const allCompleted = course.modules.every((mod) => mod.completed);
+
+  // Validar si TODOS los módulos están completados
+  const allCompleted = course.modules.length > 0 && course.modules.every((mod) => mod.completed);
 
   return (
     <div className="p-5 space-y-6 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -347,40 +349,93 @@ function CourseDetailScreen({ course, userProfile, onSelectModule, onBack }: { c
           <div className="space-y-3">
             <h3 className="font-black text-gray-900 text-base tracking-tight" style={{ fontFamily: "Nunito, sans-serif" }}>Módulos del Plan de Adelanto</h3>
             <div className="space-y-2.5">
-              {course.modules?.map((mod, idx) => (
-                <div key={mod.id} onClick={() => onSelectModule(mod)} className={`rounded-xl border p-4 flex items-center justify-between cursor-pointer hover:shadow-sm transition-all group ${mod.completed ? "bg-emerald-50 border-emerald-200" : "bg-white"}`} style={{ borderColor: mod.completed ? "rgba(16,185,129,0.2)" : "rgba(91,33,182,0.06)" }}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-mono text-xs font-black">{idx + 1}</div>
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-800 group-hover:text-purple-700 transition-colors">{mod.title}</h4>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{mod.duration}</p>
+              {course.modules?.map((mod, idx) => {
+                const isUnlocked = idx === 0 || course.modules[idx - 1].completed;
+
+                return (
+                  <div 
+                    key={mod.id} 
+                    onClick={() => {
+                      if (isUnlocked) {
+                        onSelectModule(mod);
+                      } else {
+                        alert("Debes aprobar y completar el módulo anterior para acceder a este.");
+                      }
+                    }} 
+                    className={`rounded-xl border p-4 flex items-center justify-between transition-all group ${
+                      !isUnlocked
+                        ? "bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed"
+                        : mod.completed 
+                        ? "bg-emerald-50 border-emerald-200 cursor-pointer" 
+                        : "bg-white border-purple-100 hover:border-purple-300 cursor-pointer"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-xs font-black ${
+                        !isUnlocked 
+                          ? "bg-gray-200 text-gray-500" 
+                          : mod.completed 
+                          ? "bg-emerald-100 text-emerald-700" 
+                          : "bg-purple-50 text-purple-600"
+                      }`}>
+                        {!isUnlocked ? <Lock className="w-3.5 h-3.5" /> : idx + 1}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-800">{mod.title}</h4>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{mod.duration}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!isUnlocked && (
+                        <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
+                          Bloqueado
+                        </span>
+                      )}
+                      {isUnlocked && mod.completed && (
+                        <span className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </span>
+                      )}
+                      {isUnlocked && !mod.completed && (
+                        <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 group-hover:underline">
+                          Estudiar <ArrowRight className="w-3 h-3" />
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {mod.completed ? (
-                      <span className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center"><Check className="w-3 h-3 stroke-[3]" /></span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 group-hover:underline">Estudiar <ArrowRight className="w-3 h-3" /></span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
 
+        {/* Tarjeta de Certificación de Especialidad */}
         <div className="w-full lg:w-72 flex-shrink-0 space-y-4">
           <div className="bg-white rounded-2xl border p-4 text-center space-y-4" style={{ borderColor: "rgba(91,33,182,0.06)" }}>
-            <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto shadow-sm"><Trophy className="w-8 h-8" /></div>
+            <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+              <Trophy className="w-8 h-8" />
+            </div>
             <div>
               <h4 className="text-xs font-black text-gray-800" style={{ fontFamily: "Nunito, sans-serif" }}>Certificación de Especialidad</h4>
               <p className="text-[10px] text-gray-400 mt-1 px-2">Completa el 100% de las lecturas y aprueba los cuestionarios para liberar tu insignia virtual.</p>
             </div>
-            <button onClick={() => setShowCertificate(true)} className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-sm hover:opacity-90" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>Reclamar Insignia</button>
+
+            <button 
+              disabled={!allCompleted}
+              onClick={() => setShowCertificate(true)} 
+              className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                allCompleted 
+                  ? "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" 
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-70"
+              }`}
+            >
+              {allCompleted ? "Reclamar Insignia" : "Insignia Bloqueada"}
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Modal de Certificado */}
       {showCertificate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-[32px] max-w-lg w-full p-6 shadow-2xl relative border border-purple-100 text-center space-y-5 animate-scale-in">
@@ -413,7 +468,7 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [lastAnswerWasCorrect, setLastAnswerWasCorrect] = useState(false);
 
-  const isLastQuestion = currentQuestionIndex === module.quiz.length - 1;
+  const isLastQuestion = currentQuestionIndex === (module.quiz?.length || 0) - 1;
 
   const handleNextQuestion = () => {
     setSelectedOption(null);
@@ -487,7 +542,7 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
                             );
                           }
                         } catch (e) {
-                          // fallthrough to office viewer
+                          // Fallback to office viewer
                         }
                         return (
                           <div className="aspect-video rounded-xl overflow-hidden">
@@ -524,8 +579,11 @@ function ModuleViewer({ module, course, onBack, onComplete }: { module: ModuleDa
               </div>
             ))}
           </div>
-          {module.quiz && module.quiz.length > 0 && (
+
+          {module.quiz && module.quiz.length > 0 ? (
             <button onClick={() => { setQuizActive(true); setCurrentQuestionIndex(0); }} className="w-full py-3 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:opacity-90 flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}><FileText className="w-4 h-4" /> Rendir Prueba de Validación</button>
+          ) : (
+            <button onClick={() => onComplete(module.id)} className="w-full py-3 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:opacity-90 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700">Aprobar y Completar Módulo</button>
           )}
         </div>
       ) : (
@@ -675,12 +733,11 @@ function ProfileScreen({ profile, onSave, onCancel }: { profile: any; onSave: (p
 
 // ─── COMPONENTE PRINCIPAL DE APLICACIÓN LOGUEADA ─────────────────────────────
 function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any; onLogout: () => void; onProfileUpdated: (profile: any) => void }) {
-  const [screen, setScreen] = useState<Screen>(userProfile.role === "admin" ? "dashboard" : "dashboard");
+  const [screen, setScreen] = useState<Screen>("dashboard");
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [selectedModule, setSelectedModule] = useState<ModuleData | null>(null);
 
-  // Sincroniza dinámicamente los cursos y módulos desde Supabase
   useEffect(() => {
     async function loadData() {
       const { data, error } = await supabase.from("cursos").select("*, modulos(*)");
@@ -744,15 +801,18 @@ function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any
 
   return (
     <div className="min-h-screen bg-[#faf9fe] flex flex-col lg:flex-row pb-16 lg:pb-0 selection:bg-purple-200">
-     <Sidebar 
-  role={userProfile.role as Role} 
-  currentScreen={screen} 
-  onNavigate={(s: Screen) => { setScreen(s); setSelectedCourse(null); setSelectedModule(null); }} 
-  onLogout={onLogout} 
-/>
+      <Sidebar
+        role={userProfile.role as Role}
+        currentScreen={screen}
+        onNavigate={(s: any) => {
+          setScreen(s as Screen);
+          setSelectedCourse(null);
+          setSelectedModule(null);
+        }}
+        onLogout={onLogout}
+      />
 
       <main className="flex-1 flex flex-col min-w-0 max-w-5xl mx-auto w-full lg:p-4">
-        {/* Barra superior de identidad visual */}
         <header className="bg-white border-b lg:border-none lg:rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm sticky top-0 z-30 lg:mt-2" style={{ borderColor: "rgba(91,33,182,0.05)" }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>{userProfile.avatar}</div>
@@ -764,7 +824,6 @@ function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any
           <button className="w-8 h-8 rounded-xl border flex items-center justify-center text-gray-400 hover:text-gray-600 relative"><Bell className="w-4 h-4" /><span className="absolute top-2 right-2 w-1.5 h-1.5 bg-purple-600 rounded-full"></span></button>
         </header>
 
-        {/* Enrutador de vistas condicionales */}
         <div className="flex-1 pb-10">
           {screen === "dashboard" && userProfile.role === "user" && <UserDashboard userProfile={userProfile} courses={courses} onSelectCourse={handleSelectCourse} onNavigate={setScreen} />}
           {screen === "dashboard" && userProfile.role === "admin" && <AdminDashboard />}
@@ -780,21 +839,19 @@ function MainApp({ userProfile, onLogout, onProfileUpdated }: { userProfile: any
   );
 }
 
-// ─── ROOT COMPONENT (GESTIONA LA SESIÓN CRUCIAL CON SUPABASE) ─────────────────
+// ─── COMPONENTE RAÍZ ──────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Verificar si existe una sesión activa al arrancar la página
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
       else setLoading(false);
     });
 
-    // 2. Suscribirse a cambios en la autenticación (Login, Registro, Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
@@ -812,7 +869,6 @@ export default function App() {
     if (!error && data) {
       setProfile(data);
     } else {
-      // Fallback de seguridad si el perfil tarda un instante en sincronizarse tras el registro
       setProfile({ name: "Scout", email: "", role: "user", role_label: "Miembro Activo", avatar: "S" });
     }
     setLoading(false);
@@ -827,11 +883,9 @@ export default function App() {
     );
   }
 
-  // Si no hay sesión, se renderiza la pantalla de Login conectada a Supabase
   if (!session || !profile) {
     return <LoginScreen onLogin={() => {}} />;
   }
 
-  // Si pasa la validación, ingresa al Aula Virtual con su rol e identidad correspondiente
   return <MainApp userProfile={profile} onLogout={() => supabase.auth.signOut()} onProfileUpdated={(updatedProfile) => setProfile(updatedProfile)} />;
 }
