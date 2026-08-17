@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft } from "lucide-react";
+import { useState, useEffect, type FormEvent } from "react";
+import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft, CheckCircle } from "lucide-react";
 import { supabase } from "../lib/supabase"; // Asegúrate de que la ruta sea correcta
 
 interface LoginScreenProps {
@@ -7,23 +7,44 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
-  // Modos posibles: "login" | "register" | "forgot"
-  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
+  // Modos posibles: "login" | "register" | "forgot" | "reset"
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Escuchar cuando el usuario entra mediante un enlace de recuperación de contraseña de Supabase
+  useEffect(() => {
+    // 1. Escuchar evento Auth de Supabase
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("reset");
+      }
+    });
+
+    // 2. Fallback: Verificar el hash de la URL si el usuario abre el enlace de correo
+    if (window.location.hash.includes("type=recovery")) {
+      setMode("reset");
+    }
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    // ─── OPCIÓN 1: RESTABLECER CONTRASEÑA ───
+    // ─── OPCIÓN 1: SOLICITAR RECUPERACIÓN DE CONTRASEÑA ───
     if (mode === "forgot") {
       if (!email) return alert("Por favor introduce tu correo electrónico.");
       setLoading(true);
 
+      // Se envía el enlace a la raíz de la app para evitar el error 404 en Vercel
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: window.location.origin,
       });
 
       setLoading(false);
@@ -37,12 +58,34 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       return;
     }
 
+    // ─── OPCIÓN 2: GUARDAR NUEVA CONTRASEÑA (RESET) ───
+    if (mode === "reset") {
+      if (!password) return alert("Por favor ingresa una nueva contraseña.");
+      if (password !== confirmPassword) return alert("Las contraseñas no coinciden.");
+      
+      setLoading(true);
+      const { error } = await supabase.auth.updateUser({ password });
+      setLoading(false);
+
+      if (error) {
+        alert("Error al actualizar la contraseña: " + error.message);
+      } else {
+        alert("¡Tu contraseña ha sido actualizada con éxito! Ahora puedes iniciar sesión.");
+        setPassword("");
+        setConfirmPassword("");
+        // Limpiar hash de la URL
+        window.history.replaceState(null, "", window.location.pathname);
+        setMode("login");
+      }
+      return;
+    }
+
     // Validación base para Login y Registro
     if (!email || !password) return alert("Por favor completa los campos.");
     setLoading(true);
 
     if (mode === "register") {
-      // ─── OPCIÓN 2: REGISTRO DE NUEVO USUARIO ───
+      // ─── OPCIÓN 3: REGISTRO DE NUEVO USUARIO ───
       if (!name) {
         alert("Por favor introduce tu nombre.");
         setLoading(false);
@@ -78,7 +121,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         }
       }
     } else {
-      // ─── OPCIÓN 3: INICIO DE SESIÓN DE USUARIO EXISTENTE ───
+      // ─── OPCIÓN 4: INICIO DE SESIÓN DE USUARIO EXISTENTE ───
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -109,11 +152,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                  style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
               <span className="text-white font-black text-xl tracking-tighter" style={{ fontFamily: "Nunito, sans-serif" }}>S</span>
             </div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight" style={{ fontFamily: "Nunito, sans-serif" }}>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight text-center" style={{ fontFamily: "Nunito, sans-serif" }}>
               {mode === "register" 
                 ? "Crear Cuenta Scout" 
                 : mode === "forgot" 
                 ? "Recuperar Contraseña" 
+                : mode === "reset"
+                ? "Nueva Contraseña"
                 : "Aula Virtual Scout"}
             </h1>
             <p className="text-xs text-gray-400 mt-1 text-center px-4">
@@ -121,6 +166,8 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 ? "Únete a la hermandad scout y empieza tu progresión" 
                 : mode === "forgot"
                 ? "Ingresa tu correo y te enviaremos un enlace de recuperación"
+                : mode === "reset"
+                ? "Ingresa y confirma tu nueva contraseña para acceder a tu cuenta"
                 : "Ingresa tus credenciales para acceder a tus insignias y cursos"}
             </p>
           </div>
@@ -140,22 +187,26 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </div>
             )}
 
-            {/* Campo: Email (Visible en todos los modos) */}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Correo Electrónico</label>
-              <div className="relative flex items-center">
-                <Mail className="w-4 h-4 text-gray-400 absolute left-4" />
-                <input required type="email" placeholder="scout@correo.com" value={email} onChange={e => setEmail(e.target.value)}
-                       className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
-                       style={{ borderColor: email ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+            {/* Campo: Email (Visible en login, register y forgot) */}
+            {mode !== "reset" && (
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Correo Electrónico</label>
+                <div className="relative flex items-center">
+                  <Mail className="w-4 h-4 text-gray-400 absolute left-4" />
+                  <input required type="email" placeholder="scout@correo.com" value={email} onChange={e => setEmail(e.target.value)}
+                         className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
+                         style={{ borderColor: email ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Campo: Contraseña (No se muestra en modo 'forgot') */}
+            {/* Campo: Contraseña (Visible en login, register y reset) */}
             {mode !== "forgot" && (
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Contraseña</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    {mode === "reset" ? "Nueva Contraseña" : "Contraseña"}
+                  </label>
                   {mode === "login" && (
                     <button type="button" onClick={() => setMode("forgot")} className="text-xs font-semibold text-purple-600 hover:underline">
                       ¿Olvidaste tu contraseña?
@@ -171,12 +222,29 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </div>
             )}
 
+            {/* Campo adicional: Confirmar Contraseña (Solo en Modo 'reset') */}
+            {mode === "reset" && (
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Confirmar Nueva Contraseña</label>
+                <div className="relative flex items-center">
+                  <Lock className="w-4 h-4 text-gray-400 absolute left-4" />
+                  <input required type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                         className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
+                         style={{ borderColor: confirmPassword ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                </div>
+              </div>
+            )}
+
             {/* Botón de Envío Dinámico */}
             <button type="submit" disabled={loading}
                     className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all mt-2 disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
               {loading ? (
                 <span className="animate-pulse">PROCESANDO...</span>
+              ) : mode === "reset" ? (
+                <>
+                  <CheckCircle className="w-4 h-4" /> ACTUALIZAR CONTRASEÑA
+                </>
               ) : mode === "forgot" ? (
                 <>
                   <KeyRound className="w-4 h-4" /> ENVIAR ENLACE DE RECUPERACIÓN
@@ -195,7 +263,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
           {/* Selector / Switcher de Opción */}
           <div className="mt-6 text-center">
-            {mode === "forgot" ? (
+            {mode === "forgot" || mode === "reset" ? (
               <button onClick={() => setMode("login")} className="inline-flex items-center gap-1 text-xs font-bold text-purple-600 hover:underline transition-colors">
                 <ArrowLeft className="w-3.5 h-3.5" /> Volver al Inicio de Sesión
               </button>
