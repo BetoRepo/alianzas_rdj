@@ -1,16 +1,20 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft } from "lucide-react";
 import { supabase } from "../lib/supabase"; // Asegúrate de que la ruta sea correcta
 
-export default function LoginScreen({ onLogin }) {
+interface LoginScreenProps {
+  onLogin: () => void;
+}
+
+export default function LoginScreen({ onLogin }: LoginScreenProps) {
   // Modos posibles: "login" | "register" | "forgot"
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     // ─── OPCIÓN 1: RESTABLECER CONTRASEÑA ───
@@ -19,7 +23,7 @@ export default function LoginScreen({ onLogin }) {
       setLoading(true);
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`, // Cambia esta URL si usas un enlace específico
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       setLoading(false);
@@ -56,7 +60,6 @@ export default function LoginScreen({ onLogin }) {
       } else if (authData?.user) {
         // Generar iniciales del Avatar
         const initials = name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-        
         // Crear el perfil público en la base de datos
         const { error: profileError } = await supabase.from("perfiles").insert([{
           id: authData.user.id,
@@ -93,10 +96,8 @@ export default function LoginScreen({ onLogin }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 selection:bg-purple-200"
          style={{ background: "linear-gradient(135deg, #120731, #1c0d45, #0d041e)", fontFamily: "Inter, sans-serif" }}>
-      
       {/* Tarjeta contenedora principal */}
       <div className="bg-white rounded-[32px] max-w-md w-full p-8 shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-purple-950/5 relative overflow-hidden">
-        
         {/* Decoraciones de fondo estéticas */}
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-200/40 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-200/40 rounded-full blur-2xl pointer-events-none" />

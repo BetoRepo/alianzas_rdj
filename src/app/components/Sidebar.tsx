@@ -1,7 +1,13 @@
 import { Home, BookOpen, Users, BarChart2, Award, LogOut, User } from "lucide-react";
 
-export default function Sidebar({ role, currentScreen, onNavigate, onLogout }) {
-  
+interface SidebarProps {
+  role: string;
+  currentScreen: string;
+  onNavigate: (screen: string) => void;
+  onLogout: () => void;
+}
+
+export default function Sidebar({ role, currentScreen, onNavigate, onLogout }: SidebarProps) {
   // 1. Configuración de botones de navegación según tu App.tsx
   const userMenuItems = [
     { id: "dashboard", label: "Mi Progreso", icon: <Home className="w-5 h-5" /> },
@@ -25,7 +31,6 @@ export default function Sidebar({ role, currentScreen, onNavigate, onLogout }) {
       {/* ─── NAVEGACIÓN DE ESCRITORIO (SIDEBAR IZQUIERDA) ─── */}
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r h-screen sticky top-0 flex-shrink-0"
              style={{ borderColor: "rgba(91,33,182,0.06)", fontFamily: "Inter, sans-serif" }}>
-        
         {/* Logotipo superior */}
         <div className="p-6 border-b" style={{ borderColor: "rgba(91,33,182,0.04)" }}>
           <div className="flex items-center gap-2.5">
