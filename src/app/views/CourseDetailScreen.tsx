@@ -9,9 +9,13 @@ import {
   AlertCircle,
   Lock,
   CheckCircle2,
-  Printer
+  Printer,
+  Download,
+  FileImage
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface ContentBlock {
   type: "text" | "image" | "video" | "slides" | "pdf";
@@ -53,6 +57,7 @@ export default function CourseDetailScreen() {
   const actualCourseId = params.courseId || params.id;
   const navigate = useNavigate();
   const topRef = useRef<HTMLDivElement>(null);
+  const certificateRef = useRef<HTMLDivElement>(null);
 
   const [course, setCourse] = useState<CourseData | null>(null);
   const [modules, setModules] = useState<ModuleData[]>([]);
@@ -62,12 +67,11 @@ export default function CourseDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Progreso guardado en Base de Datos
   const [completedModules, setCompletedModules] = useState<number[]>([]);
   const [showCertificate, setShowCertificate] = useState(false);
   const [userData, setUserData] = useState<{ id: string; nombre: string; ci: string } | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Estados de evaluación
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
 
@@ -80,7 +84,6 @@ export default function CourseDetailScreen() {
     }
   }, [actualCourseId]);
 
-  // Auto-Scroll hacia arriba al cambiar de vista
   useEffect(() => {
     if (topRef.current) {
       topRef.current.scrollIntoView({ behavior: "smooth" });
@@ -89,17 +92,14 @@ export default function CourseDetailScreen() {
     }
   }, [selectedModuleId, selectedEvalId, showCertificate]);
 
- async function fetchInitialData(id: string) {
+  async function fetchInitialData(id: string) {
     setLoading(true);
     setError(null);
     try {
-      // 1. Declaramos modProg aquí afuera para que esté disponible en toda la función
       let modProg: { modulo_id: number }[] | null = null;
-
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // Consultar la tabla perfiles si existe
         const { data: profile } = await supabase.from('perfiles').select('*').eq('id', user.id).single();
         
         setUserData({
@@ -108,20 +108,18 @@ export default function CourseDetailScreen() {
           ci: profile?.ci || profile?.cedula || user.user_metadata?.cedula || "No registrada"
         });
 
-        // 2. Cargar módulos completados desde TU tabla progreso_modulo
         const { data } = await supabase
           .from('progreso_modulo')
           .select('modulo_id')
           .eq('user_id', user.id);
           
-        modProg = data; // Le asignamos el valor aquí
+        modProg = data;
 
         if (modProg) {
           setCompletedModules(modProg.map(p => p.modulo_id));
         }
       }
 
-      // 3. Cargar Curso
       const { data: courseData, error: courseErr } = await supabase
         .from("cursos")
         .select("*")
@@ -137,7 +135,6 @@ export default function CourseDetailScreen() {
         badge: courseData.badge || "Capacitación"
       });
 
-      // 4. Cargar Módulos
       const { data: modulesData, error: modulesErr } = await supabase
         .from("modulos")
         .select("*")
@@ -194,7 +191,6 @@ export default function CourseDetailScreen() {
 
       setModules(fullModules);
 
-      // Ahora modProg sí existe aquí abajo sin dar error:
       if (modProg && fullModules.length > 0 && modProg.length >= fullModules.length) {
         setShowCertificate(true);
       } else if (fullModules.length > 0) {
@@ -209,25 +205,73 @@ export default function CourseDetailScreen() {
     }
   }
 
-  // Guardar el progreso del módulo en la DB
+  // --- Funciones para descargar Certificado ---
+  async function handleDownloadJPG() {
+    if (!certificateRef.current) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(certificateRef.current, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: "#FCFBF8"
+      });
+      const image = canvas.toDataURL("image/jpeg", 0.95);
+      const link = document.createElement("a");
+      link.href = image;
+      link.download = `Certificado_${userData?.nombre.replace(/\s+/g, '_') || 'Scout'}.jpg`;
+      link.click();
+    } catch (err) {
+      console.error("Error al descargar JPG:", err);
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
+  async function handleDownloadPDF() {
+    if (!certificateRef.current) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(certificateRef.current, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: "#FCFBF8"
+      });
+      const imgData = canvas.toDataURL("image/png");
+
+      const widthPx = canvas.width / 3;
+      const heightPx = canvas.height / 3;
+
+      const pdf = new jsPDF({
+        orientation: heightPx > widthPx ? "portrait" : "landscape",
+        unit: "px",
+        format: [widthPx, heightPx]
+      });
+
+      pdf.addImage(imgData, "PNG", 0, 0, widthPx, heightPx);
+      pdf.save(`Certificado_${userData?.nombre.replace(/\s+/g, '_') || 'Scout'}.pdf`);
+    } catch (err) {
+      console.error("Error al descargar PDF:", err);
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   async function saveModuleProgress(moduleId: number) {
     if (!completedModules.includes(moduleId)) {
       setCompletedModules((prev) => [...prev, moduleId]);
       if (userData?.id) {
         try {
-          // Intentar insertar ignorando si ya existe (evitar duplicados)
           await supabase.from('progreso_modulo').insert({
             user_id: userData.id,
             modulo_id: moduleId
           });
         } catch (error) {
-          console.warn("Módulo ya marcado como completado en BD");
+          console.warn("Módulo ya registrado");
         }
       }
     }
   }
 
-  // Guardar el progreso de la evaluación en TU tabla "progreso_evaluacion"
   async function saveEvaluationProgress(evalId: number, score: number, passed: boolean) {
     if (userData?.id) {
       try {
@@ -246,7 +290,6 @@ export default function CourseDetailScreen() {
 
   async function handleAdvanceToNextModule(currentModId: number) {
     await saveModuleProgress(currentModId);
-
     const currentIndex = modules.findIndex((m) => m.id === currentModId);
     const nextModule = modules[currentIndex + 1];
 
@@ -276,8 +319,6 @@ export default function CourseDetailScreen() {
     const passed = score >= activeEval.min_score;
 
     setEvalResult({ score, passed });
-    
-    // Guardar el intento en tu tabla
     await saveEvaluationProgress(activeEval.id, score, passed);
 
     if (passed) {
@@ -285,7 +326,6 @@ export default function CourseDetailScreen() {
     }
   }
 
-  // Renderizadores de contenido...
   function renderBlock(block: ContentBlock, index: number) {
     if (!block) return null;
     switch (block.type) {
@@ -343,8 +383,6 @@ export default function CourseDetailScreen() {
 
   const activeModule = modules.find((m) => m.id === selectedModuleId);
   const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
-
-  // Verificamos si todos los módulos están completados en base al array del state
   const isAllCompleted = modules.length > 0 && completedModules.length === modules.length;
 
   if (loading) {
@@ -388,14 +426,13 @@ export default function CourseDetailScreen() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Navegación de Módulos (Oculto al imprimir) */}
+        {/* Navegación lateral */}
         <div className="space-y-3 print:hidden">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contenido del Curso</h3>
           <div className="space-y-2">
             {modules.map((mod, idx) => {
               const isSelected = selectedModuleId === mod.id && selectedEvalId === null && !showCertificate;
               const isCompleted = completedModules.includes(mod.id);
-              // Bloquear si el anterior no está en completedModules
               const isLocked = idx > 0 && !completedModules.includes(modules[idx - 1].id);
 
               return (
@@ -454,7 +491,6 @@ export default function CourseDetailScreen() {
               );
             })}
             
-            {/* Botón directo al certificado si ya terminó todo */}
             {isAllCompleted && !showCertificate && (
               <button 
                 onClick={() => setShowCertificate(true)}
@@ -474,7 +510,11 @@ export default function CourseDetailScreen() {
         <div className="lg:col-span-2 print:col-span-3">
           {showCertificate ? (
             <div className="space-y-6">
-              <div className="bg-[#FCFBF8] p-12 rounded-[2rem] border-2 border-[#54217D] shadow-2xl text-center relative mx-auto max-w-3xl min-h-[600px] flex flex-col justify-between print:shadow-none print:border-none print:p-0">
+              {/* Contenedor del Certificado con ref={certificateRef} */}
+              <div 
+                ref={certificateRef} 
+                className="bg-[#FCFBF8] p-12 rounded-[2rem] border-2 border-[#54217D] shadow-2xl text-center relative mx-auto max-w-3xl min-h-[600px] flex flex-col justify-between print:shadow-none print:border-none print:p-0"
+              >
                 <div className="flex justify-between items-start mb-8">
                   <div className="flex items-center gap-2">
                     <div className="w-10 h-10 bg-[#54217D] rounded-full flex items-center justify-center text-white font-black">S</div>
@@ -528,9 +568,31 @@ export default function CourseDetailScreen() {
                 </div>
               </div>
               
-              <div className="text-center print:hidden pt-4">
-                <button onClick={() => window.print()} className="px-6 py-3 bg-[#54217D] hover:bg-[#3d165c] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 mx-auto">
-                  <Printer className="w-4 h-4" /> Imprimir o Guardar en PDF
+              {/* Botones de Descarga e Impresión */}
+              <div className="flex flex-wrap items-center justify-center gap-3 print:hidden pt-4">
+                <button 
+                  onClick={handleDownloadPDF} 
+                  disabled={isDownloading}
+                  className="px-5 py-3 bg-[#54217D] hover:bg-[#3d165c] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" /> 
+                  {isDownloading ? "Generando..." : "Descargar PDF"}
+                </button>
+
+                <button 
+                  onClick={handleDownloadJPG} 
+                  disabled={isDownloading}
+                  className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <FileImage className="w-4 h-4" /> 
+                  {isDownloading ? "Generando..." : "Descargar Imagen (JPG)"}
+                </button>
+
+                <button 
+                  onClick={() => window.print()} 
+                  className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl border border-gray-300 transition-all flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir
                 </button>
               </div>
             </div>
