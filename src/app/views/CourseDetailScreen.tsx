@@ -119,16 +119,30 @@ export default function CursoDetalleScreen() {
     }
   }
 
-  // Parsear bloques de contenido dinámicos
-  function getParsedBlocks(contenido: string | ContentBlock[]): ContentBlock[] {
-    if (Array.isArray(contenido)) return contenido;
+function getParsedBlocks(contenido: any): ContentBlock[] {
+  if (!contenido) return [];
+
+  if (Array.isArray(contenido)) {
+    return contenido;
+  }
+
+  if (typeof contenido === "object") {
+    return [contenido];
+  }
+
+  if (typeof contenido === "string") {
     try {
       const parsed = JSON.parse(contenido);
-      return Array.isArray(parsed) ? parsed : [{ type: "text", content: contenido }];
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === "object" && parsed !== null) return [parsed];
+      return [{ type: "text", content: contenido }];
     } catch {
-      return [{ type: "text", content: contenido || "" }];
+      return [{ type: "text", content: contenido }];
     }
   }
+
+  return [];
+}
 
   // Selección de opciones en la evaluación
   const handleSelectOption = (questionIndex: number, optionIndex: number) => {
