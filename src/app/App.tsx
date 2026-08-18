@@ -102,7 +102,7 @@ export default function App() {
               element={profile.role === "admin" ? <AdminDashboard /> : <UserDashboard userProfile={profile} />}
             />
             <Route path="/catalogo" element={<CatalogoScreen />} />
-            <Route path="/curso/:id" element={<CursoDetalleScreen />} />
+            <Route path="/curso/:id" element={<CursoDetalleScreen userProfile={profile} />} />
             <Route path="/curso/:courseId/modulo/:moduleId" element={<ModuleViewerScreen />} />
             <Route path="/perfil" element={<ProfileScreen profile={profile} onSave={(updated) => setProfile(updated)} />} />
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, CheckCircle2, ChevronRight, PlayCircle,
+import { 
+  ArrowLeft, CheckCircle2, ChevronRight, PlayCircle, 
   FileText, Award, HelpCircle, AlertCircle, RefreshCw
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -30,11 +30,15 @@ interface ModuleData {
   id: number;
   titulo: string;
   duracion: string;
-  contenido: string | ContentBlock[];
+  contenido: any;
   evaluaciones?: Evaluation[];
 }
 
-export default function CursoDetalleScreen() {
+interface CourseDetailScreenProps {
+  userProfile?: any;
+}
+
+export default function CourseDetailScreen({ userProfile }: CourseDetailScreenProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -99,7 +103,9 @@ export default function CursoDetalleScreen() {
             min_score: e.min_score || 70,
             preguntas: Array.isArray(e.preguntas)
               ? e.preguntas
-              : JSON.parse(e.preguntas || "[]")
+              : typeof e.preguntas === "string"
+              ? JSON.parse(e.preguntas || "[]")
+              : []
           }));
 
         return {
@@ -119,30 +125,34 @@ export default function CursoDetalleScreen() {
     }
   }
 
-function getParsedBlocks(contenido: any): ContentBlock[] {
-  if (!contenido) return [];
+  // Parsear bloques de contenido dinámicos con soporte para JSON, objetos y strings
+  function getParsedBlocks(contenido: any): ContentBlock[] {
+    if (!contenido) return [];
 
-  if (Array.isArray(contenido)) {
-    return contenido;
-  }
-
-  if (typeof contenido === "object") {
-    return [contenido];
-  }
-
-  if (typeof contenido === "string") {
-    try {
-      const parsed = JSON.parse(contenido);
-      if (Array.isArray(parsed)) return parsed;
-      if (typeof parsed === "object" && parsed !== null) return [parsed];
-      return [{ type: "text", content: contenido }];
-    } catch {
-      return [{ type: "text", content: contenido }];
+    // 1. Si Supabase ya entregó un Array de bloques
+    if (Array.isArray(contenido)) {
+      return contenido;
     }
-  }
 
-  return [];
-}
+    // 2. Si Supabase entregó un solo objeto
+    if (typeof contenido === "object") {
+      return [contenido];
+    }
+
+    // 3. Si es un String en texto plano o JSON serializado
+    if (typeof contenido === "string") {
+      try {
+        const parsed = JSON.parse(contenido);
+        if (Array.isArray(parsed)) return parsed;
+        if (typeof parsed === "object" && parsed !== null) return [parsed];
+        return [{ type: "text", content: contenido }];
+      } catch {
+        return [{ type: "text", content: contenido }];
+      }
+    }
+
+    return [];
+  }
 
   // Selección de opciones en la evaluación
   const handleSelectOption = (questionIndex: number, optionIndex: number) => {
@@ -220,8 +230,10 @@ function getParsedBlocks(contenido: any): ContentBlock[] {
           <span className="px-3 py-1 bg-white/10 text-purple-200 rounded-lg text-[10px] font-black uppercase tracking-wider">
             {course.badge || "Capacitación"}
           </span>
-          <h1 className="text-xl md:text-2xl font-black">{course.titulo}</h1>
-          <p className="text-xs text-purple-200 line-clamp-2 max-w-2xl">{course.descripcion}</p>
+          <h1 className="text-xl md:text-2xl font-black">{course.titulo || course.title}</h1>
+          <p className="text-xs text-purple-200 line-clamp-2 max-w-2xl">
+            {course.descripcion || course.summary}
+          </p>
         </div>
       </div>
 
@@ -413,72 +425,76 @@ function getParsedBlocks(contenido: any): ContentBlock[] {
 
               {/* Render dinámico de bloques de contenido */}
               <div className="space-y-6">
-                {getParsedBlocks(activeModule.contenido).map((block, idx) => (
-                  <div key={idx} className="space-y-2">
-                    {/* TEXTO */}
-                    {block.type === "text" && (
-                      <p className="text-xs leading-relaxed text-gray-700 whitespace-pre-line">
-                        {block.content}
-                      </p>
-                    )}
+                {getParsedBlocks(activeModule.contenido).length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No hay contenido redactado para este módulo aún.</p>
+                ) : (
+                  getParsedBlocks(activeModule.contenido).map((block, idx) => (
+                    <div key={idx} className="space-y-2">
+                      {/* TEXTO */}
+                      {block.type === "text" && (
+                        <p className="text-xs leading-relaxed text-gray-700 whitespace-pre-line">
+                          {block.content}
+                        </p>
+                      )}
 
-                    {/* IMAGEN */}
-                    {block.type === "image" && (
-                      <div className="space-y-1">
-                        <img
-                          src={block.content}
-                          alt={block.caption || "Imagen del módulo"}
-                          className="w-full max-h-96 object-cover rounded-2xl border"
-                        />
-                        {block.caption && (
-                          <p className="text-[10px] text-center text-gray-400 font-medium">{block.caption}</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* VIDEO */}
-                    {block.type === "video" && (
-                      <div className="space-y-1">
-                        {block.content.includes("youtube.com") || block.content.includes("youtu.be") ? (
-                          <iframe
-                            src={block.content.replace("watch?v=", "embed/")}
-                            title="Video explicativo"
-                            className="w-full h-72 md:h-96 rounded-2xl border"
-                            allowFullScreen
+                      {/* IMAGEN */}
+                      {block.type === "image" && (
+                        <div className="space-y-1">
+                          <img
+                            src={block.content}
+                            alt={block.caption || "Imagen del módulo"}
+                            className="w-full max-h-96 object-cover rounded-2xl border"
                           />
-                        ) : (
-                          <video controls src={block.content} className="w-full rounded-2xl border" />
-                        )}
-                        {block.caption && (
-                          <p className="text-[10px] text-center text-gray-400 font-medium">{block.caption}</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* PDF O SLIDES */}
-                    {(block.type === "pdf" || block.type === "slides") && (
-                      <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <FileText className="w-6 h-6 text-purple-600" />
-                          <div>
-                            <p className="text-xs font-bold text-gray-900">
-                              {block.caption || "Documento Adjunto"}
-                            </p>
-                            <p className="text-[10px] text-gray-500">Recurso complementario</p>
-                          </div>
+                          {block.caption && (
+                            <p className="text-[10px] text-center text-gray-400 font-medium">{block.caption}</p>
+                          )}
                         </div>
-                        <a
-                          href={block.content}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors"
-                        >
-                          Abrir Recurso
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+
+                      {/* VIDEO */}
+                      {block.type === "video" && (
+                        <div className="space-y-1">
+                          {block.content.includes("youtube.com") || block.content.includes("youtu.be") ? (
+                            <iframe
+                              src={block.content.replace("watch?v=", "embed/")}
+                              title="Video explicativo"
+                              className="w-full h-72 md:h-96 rounded-2xl border"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <video controls src={block.content} className="w-full rounded-2xl border" />
+                          )}
+                          {block.caption && (
+                            <p className="text-[10px] text-center text-gray-400 font-medium">{block.caption}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* PDF O SLIDES */}
+                      {(block.type === "pdf" || block.type === "slides") && (
+                        <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-6 h-6 text-purple-600" />
+                            <div>
+                              <p className="text-xs font-bold text-gray-900">
+                                {block.caption || "Documento Adjunto"}
+                              </p>
+                              <p className="text-[10px] text-gray-500">Recurso complementario</p>
+                            </div>
+                          </div>
+                          <a
+                            href={block.content}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors"
+                          >
+                            Abrir Recurso
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           ) : null}
