@@ -89,17 +89,17 @@ export default function CourseDetailScreen() {
     }
   }, [selectedModuleId, selectedEvalId, showCertificate]);
 
-  async function fetchInitialData(id: string) {
+ async function fetchInitialData(id: string) {
     setLoading(true);
     setError(null);
     try {
-      // 1. Obtener usuario actual
+      // 1. Declaramos modProg aquí afuera para que esté disponible en toda la función
+      let modProg: { modulo_id: number }[] | null = null;
+
       const { data: { user } } = await supabase.auth.getUser();
-      let currentUserId = null;
 
       if (user) {
-        currentUserId = user.id;
-        // Consultar la tabla perfiles si existe para más datos, si no usar metadatos
+        // Consultar la tabla perfiles si existe
         const { data: profile } = await supabase.from('perfiles').select('*').eq('id', user.id).single();
         
         setUserData({
@@ -109,11 +109,13 @@ export default function CourseDetailScreen() {
         });
 
         // 2. Cargar módulos completados desde TU tabla progreso_modulo
-        const { data: modProg } = await supabase
+        const { data } = await supabase
           .from('progreso_modulo')
           .select('modulo_id')
           .eq('user_id', user.id);
           
+        modProg = data; // Le asignamos el valor aquí
+
         if (modProg) {
           setCompletedModules(modProg.map(p => p.modulo_id));
         }
@@ -192,11 +194,10 @@ export default function CourseDetailScreen() {
 
       setModules(fullModules);
 
-      // Si el curso ya está completamente terminado, mostrar certificado de una vez
+      // Ahora modProg sí existe aquí abajo sin dar error:
       if (modProg && fullModules.length > 0 && modProg.length >= fullModules.length) {
         setShowCertificate(true);
       } else if (fullModules.length > 0) {
-        // Seleccionar el primer módulo no completado (o el primero si todos están bloqueados)
         const firstUncompleted = fullModules.find(m => !modProg?.some(p => p.modulo_id === m.id));
         setSelectedModuleId(firstUncompleted ? firstUncompleted.id : fullModules[0].id);
       }
@@ -212,7 +213,6 @@ export default function CourseDetailScreen() {
   async function saveModuleProgress(moduleId: number) {
     if (!completedModules.includes(moduleId)) {
       setCompletedModules((prev) => [...prev, moduleId]);
-      
       if (userData?.id) {
         try {
           // Intentar insertar ignorando si ya existe (evitar duplicados)
