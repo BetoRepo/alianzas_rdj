@@ -75,7 +75,6 @@ export default function CourseDetailScreen() {
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
 
-  // Formateo de fecha extraído para evitar colisión de sintaxis en JSX
   const formattedDate = new Date().toLocaleDateString("es-VE", {
     year: "numeric",
     month: "long",
@@ -213,6 +212,33 @@ export default function CourseDetailScreen() {
     }
   }
 
+  // Función para capturar el certificado reemplazando los colores 'oklch' incompatibles
+  async function captureCertificateCanvas(element: HTMLDivElement) {
+    return await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: "#FCFBF8",
+      onclone: (clonedDoc) => {
+        const styleElements = clonedDoc.querySelectorAll("style");
+        styleElements.forEach((style) => {
+          if (style.innerHTML.includes("oklch")) {
+            style.innerHTML = style.innerHTML.replace(/oklch\([^)]+\)/gi, "#54217D");
+          }
+        });
+
+        const allElements = clonedDoc.querySelectorAll<HTMLElement>("*");
+        allElements.forEach((el) => {
+          const styleAttr = el.getAttribute("style");
+          if (styleAttr && styleAttr.includes("oklch")) {
+            el.setAttribute("style", styleAttr.replace(/oklch\([^)]+\)/gi, "#54217D"));
+          }
+        });
+      }
+    });
+  }
+
   async function handleDownloadJPG() {
     if (!certificateRef.current) {
       alert("No se encontró la vista del certificado para descargar.");
@@ -220,14 +246,7 @@ export default function CourseDetailScreen() {
     }
     setIsDownloading(true);
     try {
-      const canvas = await html2canvas(certificateRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: "#FCFBF8"
-      });
-
+      const canvas = await captureCertificateCanvas(certificateRef.current);
       const image = canvas.toDataURL("image/jpeg", 0.95);
       const link = document.createElement("a");
       link.href = image;
@@ -252,14 +271,7 @@ export default function CourseDetailScreen() {
     }
     setIsDownloading(true);
     try {
-      const canvas = await html2canvas(certificateRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: "#FCFBF8"
-      });
-
+      const canvas = await captureCertificateCanvas(certificateRef.current);
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
       
       const pdf = new jsPDF({
@@ -540,7 +552,7 @@ export default function CourseDetailScreen() {
         <div className="lg:col-span-2 print:col-span-3">
           {showCertificate ? (
             <div className="space-y-6">
-              {/* Plantilla del Certificado con Referencia DOM */}
+              {/* Plantilla del Certificado */}
               <div 
                 ref={certificateRef} 
                 className="bg-[#FCFBF8] p-12 rounded-[2rem] border-2 border-[#54217D] shadow-2xl text-center relative mx-auto max-w-3xl min-h-[600px] flex flex-col justify-between print:shadow-none print:border-none print:p-0"
@@ -598,7 +610,7 @@ export default function CourseDetailScreen() {
                 </div>
               </div>
               
-              {/* Botones de Descarga */}
+              {/* Botones de Acciones */}
               <div className="flex flex-wrap items-center justify-center gap-3 print:hidden pt-4">
                 <button 
                   onClick={handleDownloadPDF} 
@@ -639,6 +651,7 @@ export default function CourseDetailScreen() {
                   <Award className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`} />
                   <h3 className="text-lg font-bold">{evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "Necesitas un nuevo intento."}</h3>
                   <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
+                  
                   {evalResult.passed ? (
                     <button onClick={() => activeModule && handleAdvanceToNextModule(activeModule.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
                       Continuar <ChevronRight className="w-4 h-4" />
