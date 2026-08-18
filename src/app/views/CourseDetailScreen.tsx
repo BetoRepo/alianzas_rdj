@@ -6,7 +6,9 @@ import {
   FileDown,
   Presentation,
   Award,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  CheckCircle2
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -46,9 +48,8 @@ interface CourseData {
 }
 
 export default function CourseDetailScreen() {
-  // SOLUCIÓN: Capturamos cualquier parámetro que venga en la URL (id o courseId)
   const params = useParams();
-  const actualCourseId = params.courseId || params.id; 
+  const actualCourseId = params.courseId || params.id;
   const navigate = useNavigate();
 
   const [course, setCourse] = useState<CourseData | null>(null);
@@ -59,6 +60,9 @@ export default function CourseDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Estados de progreso (Para la presentación)
+  const [completedModules, setCompletedModules] = useState<number[]>([]);
+
   // Estados de evaluación
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
@@ -67,7 +71,6 @@ export default function CourseDetailScreen() {
     if (actualCourseId) {
       void fetchCourseData(actualCourseId);
     } else {
-      // Si no hay ID en la URL, apagamos el loading y mostramos error
       setLoading(false);
       setError("No se encontró el identificador del curso en la URL.");
     }
@@ -103,7 +106,7 @@ export default function CourseDetailScreen() {
 
       if (modulesErr) throw new Error(`Error en módulos: ${modulesErr.message}`);
 
-      // 3. Obtener evaluaciones en un bloque protegido e independiente
+      // 3. Obtener evaluaciones 
       const modIds = (modulesData || []).map((m) => m.id);
       let evalsData: any[] = [];
 
@@ -121,10 +124,8 @@ export default function CourseDetailScreen() {
         }
       }
 
-      // 4. Mapear la información de forma segura (previniendo JSON escapado)
+      // 4. Mapear la información
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
-        
-        // Manejo seguro del contenido JSON para evitar bloqueos visuales
         let parsedContent = mod.content || mod.contenido;
         if (typeof parsedContent === "string") {
             try {
@@ -172,7 +173,14 @@ export default function CourseDetailScreen() {
     }
   }
 
-  // Renderizador de Bloques
+  // Marcar el módulo actual como completado
+  function handleCompleteModule(moduleId: number) {
+    if (!completedModules.includes(moduleId)) {
+      setCompletedModules((prev) => [...prev, moduleId]);
+    }
+  }
+
+  // Renderizador de Bloques actualizado para previsualizar PDFs y PPTs
   function renderBlock(block: ContentBlock, index: number) {
     if (!block) return null;
     switch (block.type) {
@@ -205,29 +213,56 @@ export default function CourseDetailScreen() {
             )}
           </div>
         );
-      case "slides":
       case "pdf":
         return (
-          <div key={index} className="my-4 p-4 bg-purple-50 rounded-2xl border border-purple-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {block.type === "slides" ? (
-                <Presentation className="w-6 h-6 text-purple-600" />
-              ) : (
-                <FileDown className="w-6 h-6 text-purple-600" />
-              )}
-              <div>
-                <p className="text-sm font-bold text-gray-800">{block.caption || "Recurso descargable"}</p>
-                <p className="text-xs text-gray-500 uppercase">{block.type}</p>
+          <div key={index} className="my-6">
+            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-t-2xl border border-b-0 border-purple-200">
+              <div className="flex items-center gap-3">
+                <FileDown className="w-5 h-5 text-purple-600" />
+                <div>
+                  <p className="text-sm font-bold text-gray-800">{block.caption || "Documento PDF"}</p>
+                </div>
               </div>
+              <a
+                href={block.content}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-purple-600 hover:text-purple-800 transition-colors"
+              >
+                Abrir en pestaña nueva
+              </a>
             </div>
-            <a
-              href={block.content}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-purple-700 transition-all"
-            >
-              Ver Recurso
-            </a>
+            <div className="w-full h-[600px] border border-purple-200 rounded-b-2xl overflow-hidden bg-gray-50">
+              <iframe src={block.content} className="w-full h-full" title="Visor PDF" />
+            </div>
+          </div>
+        );
+      case "slides":
+        return (
+          <div key={index} className="my-6">
+            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-t-2xl border border-b-0 border-purple-200">
+              <div className="flex items-center gap-3">
+                <Presentation className="w-5 h-5 text-purple-600" />
+                <div>
+                  <p className="text-sm font-bold text-gray-800">{block.caption || "Presentación"}</p>
+                </div>
+              </div>
+              <a
+                href={block.content}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-purple-600 hover:text-purple-800 transition-colors"
+              >
+                Descargar original
+              </a>
+            </div>
+            <div className="w-full h-[500px] border border-purple-200 rounded-b-2xl overflow-hidden bg-gray-50">
+              <iframe
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(block.content)}&embedded=true`}
+                className="w-full h-full"
+                title="Visor Presentación"
+              />
+            </div>
           </div>
         );
       case "text":
@@ -240,7 +275,6 @@ export default function CourseDetailScreen() {
     }
   }
 
-  // Lógica de Evaluaciones
   const activeModule = modules.find((m) => m.id === selectedModuleId);
   const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
 
@@ -249,7 +283,7 @@ export default function CourseDetailScreen() {
   }
 
   function handleSubmitQuiz() {
-    if (!activeEval) return;
+    if (!activeEval || !activeModule) return;
 
     let correctCount = 0;
     activeEval.preguntas.forEach((q, idx) => {
@@ -262,6 +296,11 @@ export default function CourseDetailScreen() {
     const passed = score >= activeEval.min_score;
 
     setEvalResult({ score, passed });
+
+    // Si aprueba, completamos el módulo automáticamente
+    if (passed) {
+      handleCompleteModule(activeModule.id);
+    }
   }
 
   if (loading) {
@@ -310,23 +349,32 @@ export default function CourseDetailScreen() {
 
       {/* Contenido Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
         {/* Navegación de Módulos */}
         <div className="space-y-3">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contenido del Curso</h3>
           <div className="space-y-2">
             {modules.map((mod, idx) => {
               const isSelected = selectedModuleId === mod.id && selectedEvalId === null;
+              // Bloquear si NO es el primero y el módulo anterior NO está completado
+              const isLocked = idx > 0 && !completedModules.includes(modules[idx - 1].id);
+              const isCompleted = completedModules.includes(mod.id);
+
               return (
                 <div key={mod.id} className="space-y-1">
                   <button
                     onClick={() => {
+                      if (isLocked) return;
                       setSelectedModuleId(mod.id);
                       setSelectedEvalId(null);
                       setEvalResult(null);
                       setUserAnswers({});
                     }}
+                    disabled={isLocked}
                     className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                      isSelected
+                      isLocked
+                        ? "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed opacity-80"
+                        : isSelected
                         ? "bg-purple-600 text-white border-purple-600 shadow-md"
                         : "bg-white text-gray-800 border-gray-100 hover:border-purple-200"
                     }`}
@@ -334,23 +382,29 @@ export default function CourseDetailScreen() {
                     <div className="flex items-center gap-3">
                       <span
                         className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                          isSelected ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700"
+                          isLocked ? "bg-gray-200 text-gray-500" : isSelected ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700"
                         }`}
                       >
-                        {idx + 1}
+                        {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : (idx + 1)}
                       </span>
                       <div>
-                        <p className="text-xs font-bold line-clamp-1">{mod.titulo}</p>
-                        <p className={`text-[10px] ${isSelected ? "text-purple-200" : "text-gray-400"}`}>
+                        <p className={`text-xs font-bold line-clamp-1 ${isCompleted && !isSelected ? "text-emerald-700" : ""}`}>
+                          {mod.titulo}
+                        </p>
+                        <p className={`text-[10px] ${isLocked ? "text-gray-400" : isSelected ? "text-purple-200" : "text-gray-400"}`}>
                           {mod.duracion}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className={`w-4 h-4 ${isSelected ? "text-white" : "text-gray-400"}`} />
+                    {isLocked ? (
+                      <Lock className="w-4 h-4 text-gray-300" />
+                    ) : (
+                      <ChevronRight className={`w-4 h-4 ${isSelected ? "text-white" : "text-gray-400"}`} />
+                    )}
                   </button>
 
-                  {/* Evaluaciones */}
-                  {mod.evaluaciones.map((ev) => {
+                  {/* Evaluaciones del Módulo */}
+                  {!isLocked && mod.evaluaciones.map((ev) => {
                     const isEvalSelected = selectedModuleId === mod.id && selectedEvalId === ev.id;
                     return (
                       <button
@@ -399,18 +453,21 @@ export default function CourseDetailScreen() {
                     className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`}
                   />
                   <h3 className="text-lg font-bold">
-                    {evalResult.passed ? "¡Felicidades! Aprobaste." : "Necesitas un nuevo intento."}
+                    {evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "Necesitas un nuevo intento para continuar."}
                   </h3>
                   <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
-                  <button
-                    onClick={() => {
-                      setEvalResult(null);
-                      setUserAnswers({});
-                    }}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
-                  >
-                    Reintentar Evaluación
-                  </button>
+                  
+                  {!evalResult.passed && (
+                    <button
+                      onClick={() => {
+                        setEvalResult(null);
+                        setUserAnswers({});
+                      }}
+                      className="px-4 py-2 mt-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all"
+                    >
+                      Reintentar Evaluación
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -467,6 +524,22 @@ export default function CourseDetailScreen() {
                   </p>
                 ) : (
                   activeModule.contenido.map((block: any, idx: number) => renderBlock(block, idx))
+                )}
+              </div>
+
+              {/* Botón para avanzar si el módulo no tiene evaluación obligatoria (o si se quiere avanzar manual) */}
+              <div className="pt-6 border-t mt-8">
+                {completedModules.includes(activeModule.id) ? (
+                  <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl flex items-center justify-center gap-2 text-sm font-bold border border-emerald-100">
+                    <CheckCircle2 className="w-5 h-5" /> Módulo Completado
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleCompleteModule(activeModule.id)}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-5 h-5" /> Marcar como completado para avanzar
+                  </button>
                 )}
               </div>
             </div>
