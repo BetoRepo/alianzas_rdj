@@ -46,7 +46,9 @@ interface CourseData {
 }
 
 export default function CourseDetailScreen() {
-  const { courseId } = useParams<{ courseId: string }>();
+  // SOLUCIÓN: Capturamos cualquier parámetro que venga en la URL (id o courseId)
+  const params = useParams();
+  const actualCourseId = params.courseId || params.id; 
   const navigate = useNavigate();
 
   const [course, setCourse] = useState<CourseData | null>(null);
@@ -62,10 +64,14 @@ export default function CourseDetailScreen() {
   const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
 
   useEffect(() => {
-    if (courseId) {
-      void fetchCourseData(courseId);
+    if (actualCourseId) {
+      void fetchCourseData(actualCourseId);
+    } else {
+      // Si no hay ID en la URL, apagamos el loading y mostramos error
+      setLoading(false);
+      setError("No se encontró el identificador del curso en la URL.");
     }
-  }, [courseId]);
+  }, [actualCourseId]);
 
   async function fetchCourseData(id: string) {
     setLoading(true);
@@ -115,8 +121,22 @@ export default function CourseDetailScreen() {
         }
       }
 
-      // 4. Mapear la información
+      // 4. Mapear la información de forma segura (previniendo JSON escapado)
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
+        
+        // Manejo seguro del contenido JSON para evitar bloqueos visuales
+        let parsedContent = mod.content || mod.contenido;
+        if (typeof parsedContent === "string") {
+            try {
+                parsedContent = JSON.parse(parsedContent);
+                if (typeof parsedContent === "string") {
+                    parsedContent = JSON.parse(parsedContent);
+                }
+            } catch (e) {
+                parsedContent = [{ type: "text", content: parsedContent }];
+            }
+        }
+
         const modEvals = evalsData
           .filter((e) => e.modulo_id === mod.id)
           .map((e) => ({
@@ -134,7 +154,7 @@ export default function CourseDetailScreen() {
           id: mod.id,
           titulo: mod.title || mod.titulo || "Módulo sin título",
           duracion: mod.duration || mod.duracion || "45 min",
-          contenido: mod.content || mod.contenido,
+          contenido: parsedContent,
           evaluaciones: modEvals
         };
       });
@@ -148,36 +168,13 @@ export default function CourseDetailScreen() {
       console.error("Error al cargar el curso:", err);
       setError(err.message || "No se pudo conectar con la base de datos.");
     } finally {
-      // GARANTIZA que el estado de "Cargando curso..." se apague en cualquier escenario
       setLoading(false);
     }
   }
 
-  // Deserialización segura de JSON de bloques
-  function getParsedBlocks(contentField: any): ContentBlock[] {
-    if (!contentField) return [];
-
-    let data = contentField;
-
-    if (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-        if (typeof data === "string") {
-          data = JSON.parse(data);
-        }
-      } catch {
-        return [{ type: "text", content: contentField }];
-      }
-    }
-
-    if (Array.isArray(data)) return data;
-    if (typeof data === "object" && data !== null) return [data];
-
-    return [];
-  }
-
   // Renderizador de Bloques
   function renderBlock(block: ContentBlock, index: number) {
+    if (!block) return null;
     switch (block.type) {
       case "image":
         return (
@@ -464,12 +461,12 @@ export default function CourseDetailScreen() {
               </div>
 
               <div className="space-y-4">
-                {getParsedBlocks(activeModule.contenido).length === 0 ? (
+                {!Array.isArray(activeModule.contenido) || activeModule.contenido.length === 0 ? (
                   <p className="text-xs text-gray-400 italic py-6 text-center">
                     No hay contenido redactado para este módulo aún.
                   </p>
                 ) : (
-                  getParsedBlocks(activeModule.contenido).map((block, idx) => renderBlock(block, idx))
+                  activeModule.contenido.map((block: any, idx: number) => renderBlock(block, idx))
                 )}
               </div>
             </div>
