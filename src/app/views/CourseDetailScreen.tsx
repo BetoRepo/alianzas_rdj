@@ -2,13 +2,9 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  CheckCircle2,
   ChevronRight,
-  FileText,
-  Video,
-  Image as ImageIcon,
-  Presentation,
   FileDown,
+  Presentation,
   Award,
   AlertCircle
 } from "lucide-react";
@@ -83,7 +79,7 @@ export default function CourseDetailScreen() {
         .eq("id", id)
         .single();
 
-      if (courseErr) throw courseErr;
+      if (courseErr) throw new Error(`Curso no encontrado: ${courseErr.message}`);
 
       setCourse({
         id: courseData.id,
@@ -99,9 +95,9 @@ export default function CourseDetailScreen() {
         .eq("curso_id", id)
         .order("orden", { ascending: true });
 
-      if (modulesErr) throw modulesErr;
+      if (modulesErr) throw new Error(`Error en módulos: ${modulesErr.message}`);
 
-      // 3. Obtener evaluaciones (Protegido con try/catch interno para que nunca congele la app)
+      // 3. Obtener evaluaciones en un bloque protegido e independiente
       const modIds = (modulesData || []).map((m) => m.id);
       let evalsData: any[] = [];
 
@@ -115,11 +111,11 @@ export default function CourseDetailScreen() {
           
           if (evals) evalsData = evals;
         } catch (e) {
-          console.warn("No se pudieron cargar las evaluaciones:", e);
+          console.warn("Advertencia: No se pudieron sincronizar las evaluaciones:", e);
         }
       }
 
-      // 4. Mapear módulos
+      // 4. Mapear la información
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
         const modEvals = evalsData
           .filter((e) => e.modulo_id === mod.id)
@@ -149,15 +145,15 @@ export default function CourseDetailScreen() {
         setSelectedModuleId(fullModules[0].id);
       }
     } catch (err: any) {
-      console.error("Error cargando curso:", err);
-      setError(err.message || "Error al conectar con la base de datos.");
+      console.error("Error al cargar el curso:", err);
+      setError(err.message || "No se pudo conectar con la base de datos.");
     } finally {
-      // IMPORTANTE: Garantiza que el loader SIEMPRE se apague
+      // GARANTIZA que el estado de "Cargando curso..." se apague en cualquier escenario
       setLoading(false);
     }
   }
 
-  // Parsear los bloques de contenido (soporta doble parseo en caso de JSON escapado)
+  // Deserialización segura de JSON de bloques
   function getParsedBlocks(contentField: any): ContentBlock[] {
     if (!contentField) return [];
 
@@ -247,7 +243,7 @@ export default function CourseDetailScreen() {
     }
   }
 
-  // Lógica de Evaluación
+  // Lógica de Evaluaciones
   const activeModule = modules.find((m) => m.id === selectedModuleId);
   const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
 
@@ -274,7 +270,10 @@ export default function CourseDetailScreen() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
-        <p className="text-sm font-medium text-gray-500 animate-pulse">Cargando curso...</p>
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs font-bold text-purple-800">Cargando curso...</p>
+        </div>
       </div>
     );
   }
@@ -287,8 +286,8 @@ export default function CourseDetailScreen() {
         </button>
         <div className="p-6 bg-rose-50 border border-rose-100 rounded-3xl text-center space-y-2">
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
-          <h2 className="text-base font-bold text-rose-900">Error al cargar el curso</h2>
-          <p className="text-xs text-rose-700">{error || "No se encontró la información esperada."}</p>
+          <h2 className="text-base font-bold text-rose-900">No se pudo cargar el curso</h2>
+          <p className="text-xs text-rose-700">{error || "Intenta recargar la página."}</p>
         </div>
       </div>
     );
@@ -296,7 +295,6 @@ export default function CourseDetailScreen() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
-      {/* Botón Volver */}
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-purple-600 transition-all"
@@ -304,7 +302,7 @@ export default function CourseDetailScreen() {
         <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
       </button>
 
-      {/* Cabecera del Curso */}
+      {/* Cabecera */}
       <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3">
         <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider">
           {course.badge}
@@ -354,7 +352,7 @@ export default function CourseDetailScreen() {
                     <ChevronRight className={`w-4 h-4 ${isSelected ? "text-white" : "text-gray-400"}`} />
                   </button>
 
-                  {/* Evaluaciones del Módulo */}
+                  {/* Evaluaciones */}
                   {mod.evaluaciones.map((ev) => {
                     const isEvalSelected = selectedModuleId === mod.id && selectedEvalId === ev.id;
                     return (
@@ -387,7 +385,6 @@ export default function CourseDetailScreen() {
         {/* Visor de Módulo / Evaluación */}
         <div className="lg:col-span-2">
           {selectedEvalId && activeEval ? (
-            /* Vista de Evaluación */
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
               <div className="border-b pb-4">
                 <span className="text-xs font-bold text-amber-600 uppercase">Evaluación</span>
@@ -460,7 +457,6 @@ export default function CourseDetailScreen() {
               )}
             </div>
           ) : activeModule ? (
-            /* Vista de Contenido de Módulo */
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
               <div className="border-b pb-4">
                 <span className="text-xs font-bold text-purple-600 uppercase">Módulo</span>
