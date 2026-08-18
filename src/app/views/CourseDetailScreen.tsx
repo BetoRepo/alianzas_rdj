@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 
 interface ContentBlock {
   type: "text" | "image" | "video" | "slides" | "pdf";
@@ -41,7 +41,7 @@ interface ModuleData {
   id: number;
   titulo: string;
   duracion: string;
-  contenido: any;
+  contenido: ContentBlock[] | any;
   evaluaciones: EvaluationData[];
 }
 
@@ -75,6 +75,13 @@ export default function CourseDetailScreen() {
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
 
+  // Formateo de fecha extraído para evitar colisión de sintaxis en JSX
+  const formattedDate = new Date().toLocaleDateString("es-VE", {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
   useEffect(() => {
     if (actualCourseId) {
       void fetchInitialData(actualCourseId);
@@ -100,23 +107,23 @@ export default function CourseDetailScreen() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        const { data: profile } = await supabase.from('perfiles').select('*').eq('id', user.id).single();
+        const { data: profile } = await supabase.from("perfiles").select("*").eq("id", user.id).single();
         
         setUserData({
           id: user.id,
-          nombre: profile?.nombre || profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || "Participante Destacado",
+          nombre: profile?.nombre || profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Participante Destacado",
           ci: profile?.ci || profile?.cedula || user.user_metadata?.cedula || "No registrada"
         });
 
         const { data } = await supabase
-          .from('progreso_modulo')
-          .select('modulo_id')
-          .eq('user_id', user.id);
+          .from("progreso_modulo")
+          .select("modulo_id")
+          .eq("user_id", user.id);
           
         modProg = data;
 
         if (modProg) {
-          setCompletedModules(modProg.map(p => p.modulo_id));
+          setCompletedModules(modProg.map((p) => p.modulo_id));
         }
       }
 
@@ -163,12 +170,12 @@ export default function CourseDetailScreen() {
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
         let parsedContent = mod.content || mod.contenido;
         if (typeof parsedContent === "string") {
-            try {
-                parsedContent = JSON.parse(parsedContent);
-                if (typeof parsedContent === "string") parsedContent = JSON.parse(parsedContent);
-            } catch (e) {
-                parsedContent = [{ type: "text", content: parsedContent }];
-            }
+          try {
+            parsedContent = JSON.parse(parsedContent);
+            if (typeof parsedContent === "string") parsedContent = JSON.parse(parsedContent);
+          } catch (e) {
+            parsedContent = [{ type: "text", content: parsedContent }];
+          }
         }
 
         const modEvals = evalsData
@@ -194,63 +201,83 @@ export default function CourseDetailScreen() {
       if (modProg && fullModules.length > 0 && modProg.length >= fullModules.length) {
         setShowCertificate(true);
       } else if (fullModules.length > 0) {
-        const firstUncompleted = fullModules.find(m => !modProg?.some(p => p.modulo_id === m.id));
+        const firstUncompleted = fullModules.find((m) => !modProg?.some((p) => p.modulo_id === m.id));
         setSelectedModuleId(firstUncompleted ? firstUncompleted.id : fullModules[0].id);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       console.error("Error al cargar datos:", err);
-      setError(err.message || "No se pudo conectar con la base de datos.");
+      setError(errorMsg || "No se pudo conectar con la base de datos.");
     } finally {
       setLoading(false);
     }
   }
 
-  // --- Funciones para descargar Certificado ---
   async function handleDownloadJPG() {
-    if (!certificateRef.current) return;
+    if (!certificateRef.current) {
+      alert("No se encontró la vista del certificado para descargar.");
+      return;
+    }
     setIsDownloading(true);
     try {
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 3,
+        scale: 2,
         useCORS: true,
+        allowTaint: true,
+        logging: false,
         backgroundColor: "#FCFBF8"
       });
+
       const image = canvas.toDataURL("image/jpeg", 0.95);
       const link = document.createElement("a");
       link.href = image;
-      link.download = `Certificado_${userData?.nombre.replace(/\s+/g, '_') || 'Scout'}.jpg`;
+      const fileName = userData?.nombre ? userData.nombre.replace(/\s+/g, "_") : "Scout";
+      link.download = `Certificado_${fileName}.jpg`;
+      document.body.appendChild(link);
       link.click();
-    } catch (err) {
-      console.error("Error al descargar JPG:", err);
+      document.body.removeChild(link);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error("Error al generar JPG:", err);
+      alert(`Error al descargar imagen: ${errorMsg}`);
     } finally {
       setIsDownloading(false);
     }
   }
 
   async function handleDownloadPDF() {
-    if (!certificateRef.current) return;
+    if (!certificateRef.current) {
+      alert("No se encontró la vista del certificado para descargar.");
+      return;
+    }
     setIsDownloading(true);
     try {
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 3,
+        scale: 2,
         useCORS: true,
+        allowTaint: true,
+        logging: false,
         backgroundColor: "#FCFBF8"
       });
-      const imgData = canvas.toDataURL("image/png");
 
-      const widthPx = canvas.width / 3;
-      const heightPx = canvas.height / 3;
-
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      
       const pdf = new jsPDF({
-        orientation: heightPx > widthPx ? "portrait" : "landscape",
-        unit: "px",
-        format: [widthPx, heightPx]
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
       });
 
-      pdf.addImage(imgData, "PNG", 0, 0, widthPx, heightPx);
-      pdf.save(`Certificado_${userData?.nombre.replace(/\s+/g, '_') || 'Scout'}.pdf`);
-    } catch (err) {
-      console.error("Error al descargar PDF:", err);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
+      const fileName = userData?.nombre ? userData.nombre.replace(/\s+/g, "_") : "Scout";
+      pdf.save(`Certificado_${fileName}.pdf`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error("Error al generar PDF:", err);
+      alert(`Error al descargar PDF: ${errorMsg}`);
     } finally {
       setIsDownloading(false);
     }
@@ -261,12 +288,12 @@ export default function CourseDetailScreen() {
       setCompletedModules((prev) => [...prev, moduleId]);
       if (userData?.id) {
         try {
-          await supabase.from('progreso_modulo').insert({
+          await supabase.from("progreso_modulo").insert({
             user_id: userData.id,
             modulo_id: moduleId
           });
         } catch (error) {
-          console.warn("Módulo ya registrado");
+          console.warn("Módulo ya registrado previamente");
         }
       }
     }
@@ -275,7 +302,7 @@ export default function CourseDetailScreen() {
   async function saveEvaluationProgress(evalId: number, score: number, passed: boolean) {
     if (userData?.id) {
       try {
-        await supabase.from('progreso_evaluacion').insert({
+        await supabase.from("progreso_evaluacion").insert({
           user_id: userData.id,
           evaluacion_id: evalId,
           score: score,
@@ -308,21 +335,24 @@ export default function CourseDetailScreen() {
   }
 
   async function handleSubmitQuiz() {
-    if (!activeEval || !activeModule) return;
+    const currentModule = modules.find((m) => m.id === selectedModuleId);
+    const currentEval = currentModule?.evaluaciones.find((e) => e.id === selectedEvalId);
+
+    if (!currentEval || !currentModule) return;
 
     let correctCount = 0;
-    activeEval.preguntas.forEach((q, idx) => {
+    currentEval.preguntas.forEach((q, idx) => {
       if (userAnswers[idx] === q.correct) correctCount++;
     });
 
-    const score = Math.round((correctCount / activeEval.preguntas.length) * 100);
-    const passed = score >= activeEval.min_score;
+    const score = Math.round((correctCount / currentEval.preguntas.length) * 100);
+    const passed = score >= currentEval.min_score;
 
     setEvalResult({ score, passed });
-    await saveEvaluationProgress(activeEval.id, score, passed);
+    await saveEvaluationProgress(currentEval.id, score, passed);
 
     if (passed) {
-      await saveModuleProgress(activeModule.id);
+      await saveModuleProgress(currentModule.id);
     }
   }
 
@@ -382,7 +412,7 @@ export default function CourseDetailScreen() {
   }
 
   const activeModule = modules.find((m) => m.id === selectedModuleId);
-  const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
+  const activeEval = activeModule?.evaluaciones?.find((e) => e.id === selectedEvalId);
   const isAllCompleted = modules.length > 0 && completedModules.length === modules.length;
 
   if (loading) {
@@ -465,7 +495,7 @@ export default function CourseDetailScreen() {
                     {isLocked ? <Lock className="w-4 h-4 text-gray-300" /> : <ChevronRight className={`w-4 h-4 ${isSelected ? "text-white" : "text-gray-400"}`} />}
                   </button>
 
-                  {!isLocked && mod.evaluaciones.map((ev) => {
+                  {!isLocked && mod.evaluaciones && mod.evaluaciones.map((ev) => {
                     const isEvalSelected = selectedModuleId === mod.id && selectedEvalId === ev.id && !showCertificate;
                     return (
                       <button
@@ -510,7 +540,7 @@ export default function CourseDetailScreen() {
         <div className="lg:col-span-2 print:col-span-3">
           {showCertificate ? (
             <div className="space-y-6">
-              {/* Contenedor del Certificado con ref={certificateRef} */}
+              {/* Plantilla del Certificado con Referencia DOM */}
               <div 
                 ref={certificateRef} 
                 className="bg-[#FCFBF8] p-12 rounded-[2rem] border-2 border-[#54217D] shadow-2xl text-center relative mx-auto max-w-3xl min-h-[600px] flex flex-col justify-between print:shadow-none print:border-none print:p-0"
@@ -519,7 +549,7 @@ export default function CourseDetailScreen() {
                   <div className="flex items-center gap-2">
                     <div className="w-10 h-10 bg-[#54217D] rounded-full flex items-center justify-center text-white font-black">S</div>
                     <div className="text-left leading-tight">
-                      <p className="text-[#54217D] font-black text-sm uppercase">World<br/>Scouting</p>
+                      <p className="text-[#54217D] font-black text-sm uppercase">World<br />Scouting</p>
                     </div>
                   </div>
                   <div className="w-12 h-12 bg-gradient-to-tr from-yellow-400 via-red-500 to-[#54217D] rounded-full opacity-80 flex items-center justify-center">
@@ -558,7 +588,7 @@ export default function CourseDetailScreen() {
                       Flor de Lis
                     </div>
                     <p className="text-xs text-gray-400 font-medium mt-2">
-                      {new Date().toLocaleDateString('es-VE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      {formattedDate}
                     </p>
                   </div>
                   <div className="text-center w-40">
@@ -568,12 +598,12 @@ export default function CourseDetailScreen() {
                 </div>
               </div>
               
-              {/* Botones de Descarga e Impresión */}
+              {/* Botones de Descarga */}
               <div className="flex flex-wrap items-center justify-center gap-3 print:hidden pt-4">
                 <button 
                   onClick={handleDownloadPDF} 
                   disabled={isDownloading}
-                  className="px-5 py-3 bg-[#54217D] hover:bg-[#3d165c] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-5 py-3 bg-[#54217D] hover:bg-[#3d165c] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Download className="w-4 h-4" /> 
                   {isDownloading ? "Generando..." : "Descargar PDF"}
@@ -582,7 +612,7 @@ export default function CourseDetailScreen() {
                 <button 
                   onClick={handleDownloadJPG} 
                   disabled={isDownloading}
-                  className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <FileImage className="w-4 h-4" /> 
                   {isDownloading ? "Generando..." : "Descargar Imagen (JPG)"}
@@ -590,7 +620,7 @@ export default function CourseDetailScreen() {
 
                 <button 
                   onClick={() => window.print()} 
-                  className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl border border-gray-300 transition-all flex items-center gap-2"
+                  className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl border border-gray-300 transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" /> Imprimir
                 </button>
@@ -609,9 +639,8 @@ export default function CourseDetailScreen() {
                   <Award className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`} />
                   <h3 className="text-lg font-bold">{evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "Necesitas un nuevo intento."}</h3>
                   <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
-                  
                   {evalResult.passed ? (
-                    <button onClick={() => handleAdvanceToNextModule(activeModule!.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
+                    <button onClick={() => activeModule && handleAdvanceToNextModule(activeModule.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
                       Continuar <ChevronRight className="w-4 h-4" />
                     </button>
                   ) : (
@@ -653,7 +682,7 @@ export default function CourseDetailScreen() {
                 {!Array.isArray(activeModule.contenido) || activeModule.contenido.length === 0 ? (
                   <p className="text-xs text-gray-400 italic py-6 text-center">No hay contenido redactado para este módulo aún.</p>
                 ) : (
-                  activeModule.contenido.map((block: any, idx: number) => renderBlock(block, idx))
+                  activeModule.contenido.map((block: ContentBlock, idx: number) => renderBlock(block, idx))
                 )}
               </div>
 
