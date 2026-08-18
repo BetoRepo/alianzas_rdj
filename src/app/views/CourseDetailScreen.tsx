@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -9,8 +9,7 @@ import {
   AlertCircle,
   Lock,
   CheckCircle2,
-  Trophy,
-  Sparkles
+  Printer
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -53,6 +52,7 @@ export default function CourseDetailScreen() {
   const params = useParams();
   const actualCourseId = params.courseId || params.id;
   const navigate = useNavigate();
+  const topRef = useRef<HTMLDivElement>(null);
 
   const [course, setCourse] = useState<CourseData | null>(null);
   const [modules, setModules] = useState<ModuleData[]>([]);
@@ -62,11 +62,10 @@ export default function CourseDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Progreso de módulos completados
+  // Progreso guardado en Base de Datos
   const [completedModules, setCompletedModules] = useState<number[]>([]);
-  
-  // Estado para ver el certificado final
   const [showCertificate, setShowCertificate] = useState(false);
+  const [userData, setUserData] = useState<{ id: string; nombre: string; ci: string } | null>(null);
 
   // Estados de evaluación
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
@@ -74,18 +73,53 @@ export default function CourseDetailScreen() {
 
   useEffect(() => {
     if (actualCourseId) {
-      void fetchCourseData(actualCourseId);
+      void fetchInitialData(actualCourseId);
     } else {
       setLoading(false);
       setError("No se encontró el identificador del curso en la URL.");
     }
   }, [actualCourseId]);
 
-  async function fetchCourseData(id: string) {
+  // Auto-Scroll hacia arriba al cambiar de vista
+  useEffect(() => {
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [selectedModuleId, selectedEvalId, showCertificate]);
+
+  async function fetchInitialData(id: string) {
     setLoading(true);
     setError(null);
-
     try {
+      // 1. Obtener usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      let currentUserId = null;
+
+      if (user) {
+        currentUserId = user.id;
+        // Consultar la tabla perfiles si existe para más datos, si no usar metadatos
+        const { data: profile } = await supabase.from('perfiles').select('*').eq('id', user.id).single();
+        
+        setUserData({
+          id: user.id,
+          nombre: profile?.nombre || profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || "Participante Destacado",
+          ci: profile?.ci || profile?.cedula || user.user_metadata?.cedula || "No registrada"
+        });
+
+        // 2. Cargar módulos completados desde TU tabla progreso_modulo
+        const { data: modProg } = await supabase
+          .from('progreso_modulo')
+          .select('modulo_id')
+          .eq('user_id', user.id);
+          
+        if (modProg) {
+          setCompletedModules(modProg.map(p => p.modulo_id));
+        }
+      }
+
+      // 3. Cargar Curso
       const { data: courseData, error: courseErr } = await supabase
         .from("cursos")
         .select("*")
@@ -101,6 +135,7 @@ export default function CourseDetailScreen() {
         badge: courseData.badge || "Capacitación"
       });
 
+      // 4. Cargar Módulos
       const { data: modulesData, error: modulesErr } = await supabase
         .from("modulos")
         .select("*")
@@ -122,7 +157,7 @@ export default function CourseDetailScreen() {
           
           if (evals) evalsData = evals;
         } catch (e) {
-          console.warn("Advertencia: No se pudieron sincronizar las evaluaciones:", e);
+          console.warn("Advertencia al cargar evaluaciones:", e);
         }
       }
 
@@ -131,9 +166,7 @@ export default function CourseDetailScreen() {
         if (typeof parsedContent === "string") {
             try {
                 parsedContent = JSON.parse(parsedContent);
-                if (typeof parsedContent === "string") {
-                    parsedContent = JSON.parse(parsedContent);
-                }
+                if (typeof parsedContent === "string") parsedContent = JSON.parse(parsedContent);
             } catch (e) {
                 parsedContent = [{ type: "text", content: parsedContent }];
             }
@@ -145,11 +178,7 @@ export default function CourseDetailScreen() {
             id: e.id,
             titulo: e.titulo || "Evaluación",
             min_score: e.min_score || 70,
-            preguntas: Array.isArray(e.preguntas)
-              ? e.preguntas
-              : typeof e.preguntas === "string"
-              ? JSON.parse(e.preguntas || "[]")
-              : []
+            preguntas: Array.isArray(e.preguntas) ? e.preguntas : typeof e.preguntas === "string" ? JSON.parse(e.preguntas || "[]") : []
           }));
 
         return {
@@ -163,22 +192,60 @@ export default function CourseDetailScreen() {
 
       setModules(fullModules);
 
-      if (fullModules.length > 0) {
-        setSelectedModuleId(fullModules[0].id);
+      // Si el curso ya está completamente terminado, mostrar certificado de una vez
+      if (modProg && fullModules.length > 0 && modProg.length >= fullModules.length) {
+        setShowCertificate(true);
+      } else if (fullModules.length > 0) {
+        // Seleccionar el primer módulo no completado (o el primero si todos están bloqueados)
+        const firstUncompleted = fullModules.find(m => !modProg?.some(p => p.modulo_id === m.id));
+        setSelectedModuleId(firstUncompleted ? firstUncompleted.id : fullModules[0].id);
       }
     } catch (err: any) {
-      console.error("Error al cargar el curso:", err);
+      console.error("Error al cargar datos:", err);
       setError(err.message || "No se pudo conectar con la base de datos.");
     } finally {
       setLoading(false);
     }
   }
 
-  // Avanzar al siguiente módulo o mostrar certificado si es el último
-  function handleAdvanceToNextModule(currentModId: number) {
-    if (!completedModules.includes(currentModId)) {
-      setCompletedModules((prev) => [...prev, currentModId]);
+  // Guardar el progreso del módulo en la DB
+  async function saveModuleProgress(moduleId: number) {
+    if (!completedModules.includes(moduleId)) {
+      setCompletedModules((prev) => [...prev, moduleId]);
+      
+      if (userData?.id) {
+        try {
+          // Intentar insertar ignorando si ya existe (evitar duplicados)
+          await supabase.from('progreso_modulo').insert({
+            user_id: userData.id,
+            modulo_id: moduleId
+          });
+        } catch (error) {
+          console.warn("Módulo ya marcado como completado en BD");
+        }
+      }
     }
+  }
+
+  // Guardar el progreso de la evaluación en TU tabla "progreso_evaluacion"
+  async function saveEvaluationProgress(evalId: number, score: number, passed: boolean) {
+    if (userData?.id) {
+      try {
+        await supabase.from('progreso_evaluacion').insert({
+          user_id: userData.id,
+          evaluacion_id: evalId,
+          score: score,
+          aprobado: passed,
+          updated_at: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error("Error al guardar evaluación:", error);
+      }
+    }
+  }
+
+  async function handleAdvanceToNextModule(currentModId: number) {
+    await saveModuleProgress(currentModId);
 
     const currentIndex = modules.findIndex((m) => m.id === currentModId);
     const nextModule = modules[currentIndex + 1];
@@ -197,26 +264,28 @@ export default function CourseDetailScreen() {
     setUserAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }));
   }
 
-  function handleSubmitQuiz() {
+  async function handleSubmitQuiz() {
     if (!activeEval || !activeModule) return;
 
     let correctCount = 0;
     activeEval.preguntas.forEach((q, idx) => {
-      if (userAnswers[idx] === q.correct) {
-        correctCount++;
-      }
+      if (userAnswers[idx] === q.correct) correctCount++;
     });
 
     const score = Math.round((correctCount / activeEval.preguntas.length) * 100);
     const passed = score >= activeEval.min_score;
 
     setEvalResult({ score, passed });
+    
+    // Guardar el intento en tu tabla
+    await saveEvaluationProgress(activeEval.id, score, passed);
 
-    if (passed && !completedModules.includes(activeModule.id)) {
-      setCompletedModules((prev) => [...prev, activeModule.id]);
+    if (passed) {
+      await saveModuleProgress(activeModule.id);
     }
   }
 
+  // Renderizadores de contenido...
   function renderBlock(block: ContentBlock, index: number) {
     if (!block) return null;
     switch (block.type) {
@@ -274,6 +343,8 @@ export default function CourseDetailScreen() {
 
   const activeModule = modules.find((m) => m.id === selectedModuleId);
   const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
+
+  // Verificamos si todos los módulos están completados en base al array del state
   const isAllCompleted = modules.length > 0 && completedModules.length === modules.length;
 
   if (loading) {
@@ -303,37 +374,29 @@ export default function CourseDetailScreen() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-purple-600 transition-all">
-        <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
-      </button>
+    <div className="p-6 max-w-7xl mx-auto space-y-8" ref={topRef}>
+      <div className="print:hidden">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-purple-600 transition-all">
+          <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
+        </button>
+      </div>
 
-      {/* Header */}
-      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider">{course.badge}</span>
-          {isAllCompleted && (
-            <button
-              onClick={() => setShowCertificate(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-400 text-amber-950 font-black text-xs rounded-xl shadow-md hover:bg-amber-300 transition-all animate-bounce"
-            >
-              <Trophy className="w-4 h-4" /> Ver Certificado
-            </button>
-          )}
-        </div>
+      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3 print:hidden">
+        <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider">{course.badge}</span>
         <h1 className="text-3xl font-black">{course.titulo}</h1>
         {course.descripcion && <p className="text-sm text-purple-100 max-w-3xl">{course.descripcion}</p>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Sidebar de Módulos */}
-        <div className="space-y-3">
+        {/* Navegación de Módulos (Oculto al imprimir) */}
+        <div className="space-y-3 print:hidden">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contenido del Curso</h3>
           <div className="space-y-2">
             {modules.map((mod, idx) => {
               const isSelected = selectedModuleId === mod.id && selectedEvalId === null && !showCertificate;
-              const isLocked = idx > 0 && !completedModules.includes(modules[idx - 1].id);
               const isCompleted = completedModules.includes(mod.id);
+              // Bloquear si el anterior no está en completedModules
+              const isLocked = idx > 0 && !completedModules.includes(modules[idx - 1].id);
 
               return (
                 <div key={mod.id} className="space-y-1">
@@ -348,10 +411,8 @@ export default function CourseDetailScreen() {
                     }}
                     disabled={isLocked}
                     className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                      isLocked
-                        ? "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed opacity-80"
-                        : isSelected
-                        ? "bg-purple-600 text-white border-purple-600 shadow-md"
+                      isLocked ? "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed opacity-80"
+                        : isSelected ? "bg-purple-600 text-white border-purple-600 shadow-md"
                         : "bg-white text-gray-800 border-gray-100 hover:border-purple-200"
                     }`}
                   >
@@ -392,41 +453,88 @@ export default function CourseDetailScreen() {
                 </div>
               );
             })}
+            
+            {/* Botón directo al certificado si ya terminó todo */}
+            {isAllCompleted && !showCertificate && (
+              <button 
+                onClick={() => setShowCertificate(true)}
+                className="w-full mt-4 p-4 rounded-2xl bg-amber-100 border border-amber-300 text-amber-900 text-left flex items-center justify-between shadow-sm hover:bg-amber-200 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <Award className="w-6 h-6 text-amber-600" />
+                  <p className="text-sm font-bold">Ver Certificado Final</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-amber-600" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Visor Principal */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 print:col-span-3">
           {showCertificate ? (
-            /* Pantalla del Certificado */
-            <div className="bg-white p-8 rounded-3xl border-4 border-amber-300 shadow-2xl text-center space-y-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <Trophy className="w-64 h-64 text-amber-500" />
-              </div>
-              <Sparkles className="w-12 h-12 text-amber-500 mx-auto animate-pulse" />
-              <span className="px-4 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-black uppercase tracking-widest">
-                Certificado de Aprobación
-              </span>
-              <h2 className="text-2xl font-black text-gray-900">¡Felicidades por completar el curso!</h2>
-              <p className="text-xs text-gray-500 max-w-md mx-auto">
-                Has completado con éxito todos los módulos y evaluaciones del programa <strong className="text-gray-800">{course.titulo}</strong>.
-              </p>
+            <div className="space-y-6">
+              <div className="bg-[#FCFBF8] p-12 rounded-[2rem] border-2 border-[#54217D] shadow-2xl text-center relative mx-auto max-w-3xl min-h-[600px] flex flex-col justify-between print:shadow-none print:border-none print:p-0">
+                <div className="flex justify-between items-start mb-8">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 bg-[#54217D] rounded-full flex items-center justify-center text-white font-black">S</div>
+                    <div className="text-left leading-tight">
+                      <p className="text-[#54217D] font-black text-sm uppercase">World<br/>Scouting</p>
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-tr from-yellow-400 via-red-500 to-[#54217D] rounded-full opacity-80 flex items-center justify-center">
+                    <div className="w-8 h-8 bg-white rounded-full"></div>
+                  </div>
+                </div>
 
-              <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 space-y-2">
-                <p className="text-xs text-amber-800 font-bold uppercase">Otorgado a</p>
-                <p className="text-lg font-black text-gray-900">Participante Destacado</p>
-                <p className="text-[10px] text-gray-400">Emisión verificada por la plataforma de capacitación</p>
-              </div>
+                <div className="space-y-2">
+                  <h2 className="text-[26px] font-black text-[#54217D] uppercase tracking-wide">Formación del Joven y Adulto Scout</h2>
+                  <h3 className="text-2xl font-bold text-gray-900">La Asociación de Scouts de Venezuela</h3>
+                  <p className="text-xl font-semibold text-gray-800 pt-2">Certifica que</p>
+                </div>
 
-              <button
-                onClick={() => window.print()}
-                className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-lg transition-all"
-              >
-                Imprimir / Guardar Certificado
-              </button>
+                <div className="mt-8 mb-4">
+                  <div className="border-b-[3px] border-gray-400 pb-2 inline-block min-w-[400px]">
+                    <h1 className="text-4xl font-black text-[#54217D] uppercase">{userData?.nombre}</h1>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-2">CI. {userData?.ci}</p>
+                </div>
+
+                <div className="space-y-4 my-8">
+                  <p className="text-lg text-gray-800">Ha aprobado el curso de</p>
+                  <h2 className="text-3xl font-black text-[#54217D] uppercase tracking-wide">{course.titulo}</h2>
+                  <p className="text-[13px] text-gray-700 max-w-lg mx-auto leading-relaxed pt-2">
+                    Certificando que los requisitos de la Asociación de Scouts de Venezuela en su Sistema de Formación Scout, se han completado.
+                  </p>
+                </div>
+
+                <div className="flex justify-between items-end px-8 mt-12">
+                  <div className="text-center w-40">
+                    <p className="font-black text-[15px] text-gray-900 uppercase">Fulanito</p>
+                    <p className="text-xs text-gray-500">tal y tal</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-16 bg-blue-100/50 rounded flex items-center justify-center text-[10px] text-blue-800 font-bold border border-blue-200">
+                      Flor de Lis
+                    </div>
+                    <p className="text-xs text-gray-400 font-medium mt-2">
+                      {new Date().toLocaleDateString('es-VE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="text-center w-40">
+                    <p className="font-black text-[15px] text-gray-900 uppercase">Fulanito</p>
+                    <p className="text-xs text-gray-500">tal y tal</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="text-center print:hidden pt-4">
+                <button onClick={() => window.print()} className="px-6 py-3 bg-[#54217D] hover:bg-[#3d165c] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 mx-auto">
+                  <Printer className="w-4 h-4" /> Imprimir o Guardar en PDF
+                </button>
+              </div>
             </div>
           ) : selectedEvalId && activeEval ? (
-            /* Visor de Evaluación */
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
               <div className="border-b pb-4">
                 <span className="text-xs font-bold text-amber-600 uppercase">Evaluación</span>
@@ -441,17 +549,11 @@ export default function CourseDetailScreen() {
                   <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
                   
                   {evalResult.passed ? (
-                    <button
-                      onClick={() => handleAdvanceToNextModule(activeModule!.id)}
-                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto"
-                    >
-                      Siguiente Módulo <ChevronRight className="w-4 h-4" />
+                    <button onClick={() => handleAdvanceToNextModule(activeModule!.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
+                      Continuar <ChevronRight className="w-4 h-4" />
                     </button>
                   ) : (
-                    <button
-                      onClick={() => { setEvalResult(null); setUserAnswers({}); }}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
-                    >
+                    <button onClick={() => { setEvalResult(null); setUserAnswers({}); }} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold">
                       Reintentar Evaluación
                     </button>
                   )}
@@ -472,18 +574,13 @@ export default function CourseDetailScreen() {
                     </div>
                   ))}
 
-                  <button
-                    onClick={handleSubmitQuiz}
-                    disabled={Object.keys(userAnswers).length < activeEval.preguntas.length}
-                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-all"
-                  >
+                  <button onClick={handleSubmitQuiz} disabled={Object.keys(userAnswers).length < activeEval.preguntas.length} className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-all">
                     Enviar Respuestas
                   </button>
                 </div>
               )}
             </div>
           ) : activeModule ? (
-            /* Visor de Módulo */
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
               <div className="border-b pb-4">
                 <span className="text-xs font-bold text-purple-600 uppercase">Módulo</span>
@@ -498,21 +595,18 @@ export default function CourseDetailScreen() {
                 )}
               </div>
 
-              {/* Botón Dinámico al final del Módulo */}
               <div className="pt-6 border-t mt-8">
-                {activeModule.evaluaciones && activeModule.evaluaciones.length > 0 ? (
-                  <button
-                    onClick={() => setSelectedEvalId(activeModule.evaluaciones[0].id)}
-                    className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
-                  >
+                {completedModules.includes(activeModule.id) ? (
+                   <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="w-full py-3.5 bg-gray-800 hover:bg-gray-900 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                     Pasar al Siguiente Módulo <ChevronRight className="w-4 h-4" />
+                   </button>
+                ) : activeModule.evaluaciones && activeModule.evaluaciones.length > 0 ? (
+                  <button onClick={() => setSelectedEvalId(activeModule.evaluaciones[0].id)} className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
                     <Award className="w-4 h-4" /> Presentar Evaluación del Módulo
                   </button>
                 ) : (
-                  <button
-                    onClick={() => handleAdvanceToNextModule(activeModule.id)}
-                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    Completar y Pasar al Siguiente Módulo <ChevronRight className="w-4 h-4" />
+                  <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                    Completar y Continuar <ChevronRight className="w-4 h-4" />
                   </button>
                 )}
               </div>
