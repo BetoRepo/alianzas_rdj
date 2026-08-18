@@ -101,23 +101,25 @@ export default function CourseDetailScreen() {
 
       if (modulesErr) throw modulesErr;
 
-      // 3. Obtener evaluaciones para los módulos
+      // 3. Obtener evaluaciones (Protegido con try/catch interno para que nunca congele la app)
       const modIds = (modulesData || []).map((m) => m.id);
       let evalsData: any[] = [];
 
       if (modIds.length > 0) {
-        const { data: evals, error: evalsErr } = await supabase
-          .from("evaluaciones")
-          .select("*")
-          .in("modulo_id", modIds)
-          .order("orden", { ascending: true });
-
-        if (!evalsErr && evals) {
-          evalsData = evals;
+        try {
+          const { data: evals } = await supabase
+            .from("evaluaciones")
+            .select("*")
+            .in("modulo_id", modIds)
+            .order("orden", { ascending: true });
+          
+          if (evals) evalsData = evals;
+        } catch (e) {
+          console.warn("No se pudieron cargar las evaluaciones:", e);
         }
       }
 
-      // Mapear módulos adaptándonos a las columnas de Supabase ('content', 'title', 'duration')
+      // 4. Mapear módulos
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
         const modEvals = evalsData
           .filter((e) => e.modulo_id === mod.id)
@@ -148,8 +150,9 @@ export default function CourseDetailScreen() {
       }
     } catch (err: any) {
       console.error("Error cargando curso:", err);
-      setError(err.message || "Error al cargar el contenido del curso.");
+      setError(err.message || "Error al conectar con la base de datos.");
     } finally {
+      // IMPORTANTE: Garantiza que el loader SIEMPRE se apague
       setLoading(false);
     }
   }
