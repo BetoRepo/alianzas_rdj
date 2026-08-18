@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, type FormEvent } from "react";
-import { 
+import {
   PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp
 } from "lucide-react";
 import { supabase, DEFAULT_STORAGE_BUCKET } from "../lib/supabase";
@@ -230,7 +230,7 @@ export default function AdminCursosScreen() {
     });
   }
 
-  // 6. GUARDAR MÓDULO
+// 6. GUARDAR MÓDULO (Ajustado a las columnas exactas de Supabase)
   async function handleSaveModule() {
     if (!activeCourse || !moduleForm) return;
     if (!moduleForm.title.trim()) return alert("El título del módulo es obligatorio.");
@@ -240,11 +240,12 @@ export default function AdminCursosScreen() {
       const contentPayload = JSON.stringify(normalizeBlocks(moduleForm.blocks));
       let moduloId = editingModuleId;
 
+      // Se asignan las llaves exactas con los nombres de la base de datos ('title', 'duration', 'content')
       const modulePayload = {
         curso_id: activeCourse.id,
-        titulo: moduleForm.title,
-        duracion: moduleForm.duration,
-        contenido: contentPayload,
+        title: moduleForm.title,
+        duration: moduleForm.duration,
+        content: contentPayload,
         quiz: "[]"
       };
 
@@ -332,7 +333,6 @@ export default function AdminCursosScreen() {
       setUploading(false);
     }
   }
-
   // 7. ELIMINAR MÓDULO
   async function handleDeleteModule(moduloId: number) {
     if (!confirm("¿Deseas eliminar este módulo?")) return;

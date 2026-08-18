@@ -1,8 +1,16 @@
-import { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, CheckCircle2, ChevronRight, PlayCircle, 
-  FileText, Award, HelpCircle, AlertCircle, RefreshCw
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  FileText,
+  Video,
+  Image as ImageIcon,
+  Presentation,
+  FileDown,
+  Award,
+  AlertCircle
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -19,7 +27,7 @@ interface QuizItem {
   explanation?: string;
 }
 
-interface Evaluation {
+interface EvaluationData {
   id: number;
   titulo: string;
   min_score: number;
@@ -31,75 +39,91 @@ interface ModuleData {
   titulo: string;
   duracion: string;
   contenido: any;
-  evaluaciones?: Evaluation[];
+  evaluaciones: EvaluationData[];
 }
 
-interface CourseDetailScreenProps {
-  userProfile?: any;
+interface CourseData {
+  id: number;
+  titulo: string;
+  descripcion: string;
+  badge: string;
 }
 
-export default function CourseDetailScreen({ userProfile }: CourseDetailScreenProps) {
-  const { id } = useParams<{ id: string }>();
+export default function CourseDetailScreen() {
+  const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
 
-  const [course, setCourse] = useState<any | null>(null);
+  const [course, setCourse] = useState<CourseData | null>(null);
   const [modules, setModules] = useState<ModuleData[]>([]);
-  const [activeModule, setActiveModule] = useState<ModuleData | null>(null);
-  const [activeEval, setActiveEval] = useState<Evaluation | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [selectedModuleId, setSelectedModuleId] = useState<number | null>(null);
+  const [selectedEvalId, setSelectedEvalId] = useState<number | null>(null);
 
-  // Estado del Quiz
-  const [answers, setAnswers] = useState<{ [key: number]: number }>({});
-  const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [score, setScore] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Estados de evaluación
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
+  const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
 
   useEffect(() => {
-    if (id) {
-      void fetchCourseData(Number(id));
+    if (courseId) {
+      void fetchCourseData(courseId);
     }
-  }, [id]);
+  }, [courseId]);
 
-  async function fetchCourseData(courseId: number) {
+  async function fetchCourseData(id: string) {
     setLoading(true);
+    setError(null);
+
     try {
-      // 1. Obtener detalles del curso
-      const { data: courseData, error: courseError } = await supabase
+      // 1. Obtener curso
+      const { data: courseData, error: courseErr } = await supabase
         .from("cursos")
         .select("*")
-        .eq("id", courseId)
+        .eq("id", id)
         .single();
 
-      if (courseError) throw courseError;
-      setCourse(courseData);
+      if (courseErr) throw courseErr;
+
+      setCourse({
+        id: courseData.id,
+        titulo: courseData.titulo || courseData.title || "Sin título",
+        descripcion: courseData.descripcion || courseData.summary || "",
+        badge: courseData.badge || "Capacitación"
+      });
 
       // 2. Obtener módulos
-      const { data: modulesData, error: modulesError } = await supabase
+      const { data: modulesData, error: modulesErr } = await supabase
         .from("modulos")
         .select("*")
-        .eq("curso_id", courseId)
+        .eq("curso_id", id)
         .order("orden", { ascending: true });
 
-      if (modulesError) throw modulesError;
+      if (modulesErr) throw modulesErr;
 
-      // 3. Obtener evaluaciones para cada módulo
+      // 3. Obtener evaluaciones para los módulos
       const modIds = (modulesData || []).map((m) => m.id);
       let evalsData: any[] = [];
+
       if (modIds.length > 0) {
-        const { data: evals } = await supabase
+        const { data: evals, error: evalsErr } = await supabase
           .from("evaluaciones")
           .select("*")
           .in("modulo_id", modIds)
           .order("orden", { ascending: true });
-        evalsData = evals || [];
+
+        if (!evalsErr && evals) {
+          evalsData = evals;
+        }
       }
 
-      // Ensamblar módulos con sus evaluaciones
+      // Mapear módulos adaptándonos a las columnas de Supabase ('content', 'title', 'duration')
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
         const modEvals = evalsData
           .filter((e) => e.modulo_id === mod.id)
           .map((e) => ({
             id: e.id,
-            titulo: e.titulo,
+            titulo: e.titulo || "Evaluación",
             min_score: e.min_score || 70,
             preguntas: Array.isArray(e.preguntas)
               ? e.preguntas
@@ -109,397 +133,353 @@ export default function CourseDetailScreen({ userProfile }: CourseDetailScreenPr
           }));
 
         return {
-          ...mod,
+          id: mod.id,
+          titulo: mod.title || mod.titulo || "Módulo sin título",
+          duracion: mod.duration || mod.duracion || "45 min",
+          contenido: mod.content || mod.contenido,
           evaluaciones: modEvals
         };
       });
 
       setModules(fullModules);
+
       if (fullModules.length > 0) {
-        setActiveModule(fullModules[0]);
+        setSelectedModuleId(fullModules[0].id);
       }
     } catch (err: any) {
-      console.error("Error cargando detalle del curso:", err.message);
+      console.error("Error cargando curso:", err);
+      setError(err.message || "Error al cargar el contenido del curso.");
     } finally {
       setLoading(false);
     }
   }
 
-  // Parsear bloques de contenido dinámicos con soporte para JSON, objetos y strings
-  function getParsedBlocks(contenido: any): ContentBlock[] {
-    if (!contenido) return [];
+  // Parsear los bloques de contenido (soporta doble parseo en caso de JSON escapado)
+  function getParsedBlocks(contentField: any): ContentBlock[] {
+    if (!contentField) return [];
 
-    // 1. Si Supabase ya entregó un Array de bloques
-    if (Array.isArray(contenido)) {
-      return contenido;
-    }
+    let data = contentField;
 
-    // 2. Si Supabase entregó un solo objeto
-    if (typeof contenido === "object") {
-      return [contenido];
-    }
-
-    // 3. Si es un String en texto plano o JSON serializado
-    if (typeof contenido === "string") {
+    if (typeof data === "string") {
       try {
-        const parsed = JSON.parse(contenido);
-        if (Array.isArray(parsed)) return parsed;
-        if (typeof parsed === "object" && parsed !== null) return [parsed];
-        return [{ type: "text", content: contenido }];
+        data = JSON.parse(data);
+        if (typeof data === "string") {
+          data = JSON.parse(data);
+        }
       } catch {
-        return [{ type: "text", content: contenido }];
+        return [{ type: "text", content: contentField }];
       }
     }
+
+    if (Array.isArray(data)) return data;
+    if (typeof data === "object" && data !== null) return [data];
 
     return [];
   }
 
-  // Selección de opciones en la evaluación
-  const handleSelectOption = (questionIndex: number, optionIndex: number) => {
-    if (quizSubmitted) return;
-    setAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }));
-  };
+  // Renderizador de Bloques
+  function renderBlock(block: ContentBlock, index: number) {
+    switch (block.type) {
+      case "image":
+        return (
+          <div key={index} className="my-4 space-y-2">
+            <img
+              src={block.content}
+              alt={block.caption || "Imagen del módulo"}
+              className="w-full max-h-96 object-cover rounded-2xl border"
+            />
+            {block.caption && (
+              <p className="text-xs text-center text-gray-500 italic">{block.caption}</p>
+            )}
+          </div>
+        );
+      case "video":
+        return (
+          <div key={index} className="my-4 space-y-2">
+            <div className="aspect-video w-full rounded-2xl overflow-hidden border bg-black">
+              <iframe
+                src={block.content}
+                title={block.caption || "Video del módulo"}
+                className="w-full h-full"
+                allowFullScreen
+              />
+            </div>
+            {block.caption && (
+              <p className="text-xs text-center text-gray-500 italic">{block.caption}</p>
+            )}
+          </div>
+        );
+      case "slides":
+      case "pdf":
+        return (
+          <div key={index} className="my-4 p-4 bg-purple-50 rounded-2xl border border-purple-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {block.type === "slides" ? (
+                <Presentation className="w-6 h-6 text-purple-600" />
+              ) : (
+                <FileDown className="w-6 h-6 text-purple-600" />
+              )}
+              <div>
+                <p className="text-sm font-bold text-gray-800">{block.caption || "Recurso descargable"}</p>
+                <p className="text-xs text-gray-500 uppercase">{block.type}</p>
+              </div>
+            </div>
+            <a
+              href={block.content}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-purple-700 transition-all"
+            >
+              Ver Recurso
+            </a>
+          </div>
+        );
+      case "text":
+      default:
+        return (
+          <div key={index} className="my-3 text-sm leading-relaxed text-gray-700 whitespace-pre-line">
+            {block.content}
+          </div>
+        );
+    }
+  }
 
-  // Enviar y calificar la evaluación
-  const handleSubmitQuiz = () => {
+  // Lógica de Evaluación
+  const activeModule = modules.find((m) => m.id === selectedModuleId);
+  const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
+
+  function handleAnswerSelect(questionIndex: number, optionIndex: number) {
+    setUserAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }));
+  }
+
+  function handleSubmitQuiz() {
     if (!activeEval) return;
+
     let correctCount = 0;
     activeEval.preguntas.forEach((q, idx) => {
-      if (answers[idx] === q.correct) {
+      if (userAnswers[idx] === q.correct) {
         correctCount++;
       }
     });
 
-    const finalScore = Math.round((correctCount / activeEval.preguntas.length) * 100);
-    setScore(finalScore);
-    setQuizSubmitted(true);
-  };
+    const score = Math.round((correctCount / activeEval.preguntas.length) * 100);
+    const passed = score >= activeEval.min_score;
 
-  const resetQuiz = () => {
-    setAnswers({});
-    setQuizSubmitted(false);
-    setScore(0);
-  };
-
-  const handleSelectModule = (mod: ModuleData) => {
-    setActiveModule(mod);
-    setActiveEval(null);
-    resetQuiz();
-  };
-
-  const handleSelectEval = (evalItem: Evaluation) => {
-    setActiveEval(evalItem);
-    resetQuiz();
-  };
+    setEvalResult({ score, passed });
+  }
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-xs font-bold text-gray-400 animate-pulse">
-        Cargando contenidos del curso...
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <p className="text-sm font-medium text-gray-500 animate-pulse">Cargando curso...</p>
       </div>
     );
   }
 
-  if (!course) {
+  if (error || !course) {
     return (
-      <div className="p-8 text-center space-y-3">
-        <p className="text-sm font-bold text-gray-600">No se encontró el curso solicitado.</p>
-        <button
-          onClick={() => navigate("/catalogo")}
-          className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
-        >
-          Volver al Catálogo
+      <div className="min-h-screen p-6 max-w-4xl mx-auto space-y-4">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs font-bold text-gray-600">
+          <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
         </button>
+        <div className="p-6 bg-rose-50 border border-rose-100 rounded-3xl text-center space-y-2">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+          <h2 className="text-base font-bold text-rose-900">Error al cargar el curso</h2>
+          <p className="text-xs text-rose-700">{error || "No se encontró la información esperada."}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
       {/* Botón Volver */}
       <button
-        onClick={() => navigate("/catalogo")}
-        className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-purple-600 transition-colors"
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-purple-600 transition-all"
       >
         <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
       </button>
 
       {/* Cabecera del Curso */}
-      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-3xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="space-y-2">
-          <span className="px-3 py-1 bg-white/10 text-purple-200 rounded-lg text-[10px] font-black uppercase tracking-wider">
-            {course.badge || "Capacitación"}
-          </span>
-          <h1 className="text-xl md:text-2xl font-black">{course.titulo || course.title}</h1>
-          <p className="text-xs text-purple-200 line-clamp-2 max-w-2xl">
-            {course.descripcion || course.summary}
-          </p>
-        </div>
+      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3">
+        <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider">
+          {course.badge}
+        </span>
+        <h1 className="text-3xl font-black">{course.titulo}</h1>
+        {course.descripcion && <p className="text-sm text-purple-100 max-w-3xl">{course.descripcion}</p>}
       </div>
 
-      {/* Grid Principal: Menú Módulos + Área de Trabajo */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
-        {/* NAVEGACIÓN DE MÓDULOS (COLUMNA IZQUIERDA) */}
-        <div className="lg:col-span-1 space-y-3">
-          <h2 className="text-xs font-black text-gray-400 uppercase tracking-wider px-1">
-            Contenido del Curso
-          </h2>
-
+      {/* Contenido Principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Navegación de Módulos */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contenido del Curso</h3>
           <div className="space-y-2">
-            {modules.map((mod, index) => {
-              const isSelected = activeModule?.id === mod.id && !activeEval;
+            {modules.map((mod, idx) => {
+              const isSelected = selectedModuleId === mod.id && selectedEvalId === null;
               return (
                 <div key={mod.id} className="space-y-1">
                   <button
-                    onClick={() => handleSelectModule(mod)}
-                    className={`w-full text-left p-3.5 rounded-2xl border text-xs font-bold transition-all flex items-center justify-between ${
+                    onClick={() => {
+                      setSelectedModuleId(mod.id);
+                      setSelectedEvalId(null);
+                      setEvalResult(null);
+                      setUserAnswers({});
+                    }}
+                    className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
                       isSelected
                         ? "bg-purple-600 text-white border-purple-600 shadow-md"
-                        : "bg-white text-gray-700 border-gray-100 hover:border-purple-200"
+                        : "bg-white text-gray-800 border-gray-100 hover:border-purple-200"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-black ${
-                        isSelected ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700"
-                      }`}>
-                        {index + 1}
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isSelected ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700"
+                        }`}
+                      >
+                        {idx + 1}
                       </span>
-                      <span className="line-clamp-1">{mod.titulo}</span>
+                      <div>
+                        <p className="text-xs font-bold line-clamp-1">{mod.titulo}</p>
+                        <p className={`text-[10px] ${isSelected ? "text-purple-200" : "text-gray-400"}`}>
+                          {mod.duracion}
+                        </p>
+                      </div>
                     </div>
                     <ChevronRight className={`w-4 h-4 ${isSelected ? "text-white" : "text-gray-400"}`} />
                   </button>
 
-                  {/* Evaluaciones asociadas al módulo */}
-                  {mod.evaluaciones && mod.evaluaciones.length > 0 && (
-                    <div className="pl-4 space-y-1">
-                      {mod.evaluaciones.map((ev) => {
-                        const isEvalSelected = activeEval?.id === ev.id;
-                        return (
-                          <button
-                            key={ev.id}
-                            onClick={() => {
-                              setActiveModule(mod);
-                              handleSelectEval(ev);
-                            }}
-                            className={`w-full text-left p-2.5 rounded-xl border text-[11px] font-bold transition-all flex items-center gap-2 ${
-                              isEvalSelected
-                                ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                                : "bg-amber-50/50 text-amber-900 border-amber-100 hover:bg-amber-100/50"
-                            }`}
-                          >
-                            <Award className="w-3.5 h-3.5 shrink-0" />
-                            <span className="line-clamp-1">{ev.titulo}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {/* Evaluaciones del Módulo */}
+                  {mod.evaluaciones.map((ev) => {
+                    const isEvalSelected = selectedModuleId === mod.id && selectedEvalId === ev.id;
+                    return (
+                      <button
+                        key={ev.id}
+                        onClick={() => {
+                          setSelectedModuleId(mod.id);
+                          setSelectedEvalId(ev.id);
+                          setEvalResult(null);
+                          setUserAnswers({});
+                        }}
+                        className={`w-full ml-4 p-2.5 rounded-xl border text-left flex items-center gap-2 text-xs font-bold transition-all ${
+                          isEvalSelected
+                            ? "bg-amber-50 text-amber-900 border-amber-300 shadow-sm"
+                            : "bg-white text-gray-600 border-gray-100 hover:border-amber-200"
+                        }`}
+                        style={{ width: "calc(100% - 1rem)" }}
+                      >
+                        <Award className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="line-clamp-1">{ev.titulo}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* ÁREA DE CONTENIDO O EVALUACIÓN (COLUMNA DERECHA) */}
-        <div className="lg:col-span-3">
-          {activeEval ? (
-            /* COMPONENTE DE EVALUACIÓN / QUIZ */
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-6">
-              <div className="border-b pb-4 flex justify-between items-center">
-                <div>
-                  <span className="text-[10px] font-black text-amber-600 uppercase tracking-wider">
-                    Evaluación del Módulo
-                  </span>
-                  <h2 className="text-lg font-black text-gray-900">{activeEval.titulo}</h2>
-                </div>
-                <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-lg">
-                  Aprobación: {activeEval.min_score}%
-                </span>
+        {/* Visor de Módulo / Evaluación */}
+        <div className="lg:col-span-2">
+          {selectedEvalId && activeEval ? (
+            /* Vista de Evaluación */
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <div className="border-b pb-4">
+                <span className="text-xs font-bold text-amber-600 uppercase">Evaluación</span>
+                <h2 className="text-xl font-black text-gray-900">{activeEval.titulo}</h2>
+                <p className="text-xs text-gray-500">Mínimo para aprobar: {activeEval.min_score}%</p>
               </div>
 
-              {/* Preguntas */}
-              <div className="space-y-6">
-                {activeEval.preguntas.map((q, qIdx) => {
-                  const selectedOpt = answers[qIdx];
-                  const isCorrect = selectedOpt === q.correct;
-
-                  return (
-                    <div key={qIdx} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3">
-                      <p className="text-xs font-extrabold text-gray-900">
+              {evalResult ? (
+                <div
+                  className={`p-6 rounded-2xl text-center space-y-3 ${
+                    evalResult.passed ? "bg-emerald-50 border border-emerald-100" : "bg-rose-50 border border-rose-100"
+                  }`}
+                >
+                  <Award
+                    className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`}
+                  />
+                  <h3 className="text-lg font-bold">
+                    {evalResult.passed ? "¡Felicidades! Aprobaste." : "Necesitas un nuevo intento."}
+                  </h3>
+                  <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
+                  <button
+                    onClick={() => {
+                      setEvalResult(null);
+                      setUserAnswers({});
+                    }}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
+                  >
+                    Reintentar Evaluación
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {activeEval.preguntas.map((q, qIdx) => (
+                    <div key={qIdx} className="space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <p className="text-sm font-bold text-gray-800">
                         {qIdx + 1}. {q.question}
                       </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {q.options.map((opt, optIdx) => {
-                          let optionStyle = "bg-white border-gray-200 text-gray-700 hover:border-purple-400";
-
-                          if (selectedOpt === optIdx) {
-                            optionStyle = "bg-purple-600 border-purple-600 text-white font-bold";
-                          }
-
-                          if (quizSubmitted) {
-                            if (optIdx === q.correct) {
-                              optionStyle = "bg-emerald-500 border-emerald-500 text-white font-bold";
-                            } else if (selectedOpt === optIdx && !isCorrect) {
-                              optionStyle = "bg-rose-500 border-rose-500 text-white font-bold";
-                            }
-                          }
-
-                          return (
-                            <button
-                              key={optIdx}
-                              onClick={() => handleSelectOption(qIdx, optIdx)}
-                              className={`p-3 rounded-xl border text-xs text-left transition-all ${optionStyle}`}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
+                      <div className="space-y-2">
+                        {q.options.map((opt, optIdx) => (
+                          <label
+                            key={optIdx}
+                            className={`flex items-center gap-3 p-3 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
+                              userAnswers[qIdx] === optIdx
+                                ? "bg-purple-50 border-purple-300 text-purple-900"
+                                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`quiz_q_${qIdx}`}
+                              checked={userAnswers[qIdx] === optIdx}
+                              onChange={() => handleAnswerSelect(qIdx, optIdx)}
+                              className="text-purple-600"
+                            />
+                            <span>{opt}</span>
+                          </label>
+                        ))}
                       </div>
-
-                      {/* Explicación si se respondió */}
-                      {quizSubmitted && q.explanation && (
-                        <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-900 flex items-start gap-2">
-                          <HelpCircle className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
-                          <span>{q.explanation}</span>
-                        </div>
-                      )}
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
 
-              {/* Botón de Enviar o Resultado */}
-              <div className="pt-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
-                {!quizSubmitted ? (
                   <button
                     onClick={handleSubmitQuiz}
-                    disabled={Object.keys(answers).length < activeEval.preguntas.length}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-all"
+                    disabled={Object.keys(userAnswers).length < activeEval.preguntas.length}
+                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-all"
                   >
                     Enviar Respuestas
                   </button>
-                ) : (
-                  <div className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl border">
-                    <div className="flex items-center gap-3">
-                      {score >= activeEval.min_score ? (
-                        <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                      ) : (
-                        <AlertCircle className="w-6 h-6 text-rose-500" />
-                      )}
-                      <div>
-                        <p className="text-xs font-black text-gray-900">
-                          Tu Puntaje: {score}%
-                        </p>
-                        <p className="text-[10px] text-gray-500">
-                          {score >= activeEval.min_score
-                            ? "¡Felicidades! Has aprobado esta evaluación."
-                            : "No alcanzaste la nota mínima. Inténtalo nuevamente."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={resetQuiz}
-                      className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-xs font-bold rounded-xl flex items-center gap-1.5"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" /> Reintentar
-                    </button>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ) : activeModule ? (
-            /* RENDERIZADO DEL MÓDULO DE APRENDIZAJE */
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-6">
-              <div className="border-b pb-4 flex justify-between items-center">
-                <div>
-                  <span className="text-[10px] font-black text-purple-600 uppercase tracking-wider">
-                    Módulo
-                  </span>
-                  <h2 className="text-lg font-black text-gray-900">{activeModule.titulo}</h2>
-                </div>
-                <span className="text-xs font-bold text-gray-400">{activeModule.duracion}</span>
+            /* Vista de Contenido de Módulo */
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <div className="border-b pb-4">
+                <span className="text-xs font-bold text-purple-600 uppercase">Módulo</span>
+                <h2 className="text-xl font-black text-gray-900">{activeModule.titulo}</h2>
               </div>
 
-              {/* Render dinámico de bloques de contenido */}
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {getParsedBlocks(activeModule.contenido).length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No hay contenido redactado para este módulo aún.</p>
+                  <p className="text-xs text-gray-400 italic py-6 text-center">
+                    No hay contenido redactado para este módulo aún.
+                  </p>
                 ) : (
-                  getParsedBlocks(activeModule.contenido).map((block, idx) => (
-                    <div key={idx} className="space-y-2">
-                      {/* TEXTO */}
-                      {block.type === "text" && (
-                        <p className="text-xs leading-relaxed text-gray-700 whitespace-pre-line">
-                          {block.content}
-                        </p>
-                      )}
-
-                      {/* IMAGEN */}
-                      {block.type === "image" && (
-                        <div className="space-y-1">
-                          <img
-                            src={block.content}
-                            alt={block.caption || "Imagen del módulo"}
-                            className="w-full max-h-96 object-cover rounded-2xl border"
-                          />
-                          {block.caption && (
-                            <p className="text-[10px] text-center text-gray-400 font-medium">{block.caption}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* VIDEO */}
-                      {block.type === "video" && (
-                        <div className="space-y-1">
-                          {block.content.includes("youtube.com") || block.content.includes("youtu.be") ? (
-                            <iframe
-                              src={block.content.replace("watch?v=", "embed/")}
-                              title="Video explicativo"
-                              className="w-full h-72 md:h-96 rounded-2xl border"
-                              allowFullScreen
-                            />
-                          ) : (
-                            <video controls src={block.content} className="w-full rounded-2xl border" />
-                          )}
-                          {block.caption && (
-                            <p className="text-[10px] text-center text-gray-400 font-medium">{block.caption}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* PDF O SLIDES */}
-                      {(block.type === "pdf" || block.type === "slides") && (
-                        <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <FileText className="w-6 h-6 text-purple-600" />
-                            <div>
-                              <p className="text-xs font-bold text-gray-900">
-                                {block.caption || "Documento Adjunto"}
-                              </p>
-                              <p className="text-[10px] text-gray-500">Recurso complementario</p>
-                            </div>
-                          </div>
-                          <a
-                            href={block.content}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors"
-                          >
-                            Abrir Recurso
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  ))
+                  getParsedBlocks(activeModule.contenido).map((block, idx) => renderBlock(block, idx))
                 )}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm text-center py-12">
+              <p className="text-xs text-gray-400">Selecciona un módulo para ver su contenido.</p>
+            </div>
+          )}
         </div>
-
       </div>
     </div>
   );
