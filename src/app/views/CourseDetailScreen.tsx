@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Printer,
   Download,
-  FileImage
+  FileImage,
+  XCircle
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import html2canvas from "html2canvas";
@@ -63,6 +64,9 @@ export default function CourseDetailScreen() {
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<number | null>(null);
   const [selectedEvalId, setSelectedEvalId] = useState<number | null>(null);
+  
+  // Nuevo estado para el Carrusel de contenido
+  const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -212,7 +216,6 @@ export default function CourseDetailScreen() {
     }
   }
 
-  // Función para capturar el certificado reemplazando los colores 'oklch' incompatibles
   async function captureCertificateCanvas(element: HTMLDivElement) {
     return await html2canvas(element, {
       scale: 2,
@@ -337,6 +340,7 @@ export default function CourseDetailScreen() {
       setSelectedEvalId(null);
       setEvalResult(null);
       setUserAnswers({});
+      setCurrentBlockIndex(0); // Reiniciar el carrusel para el nuevo módulo
     } else {
       setShowCertificate(true);
     }
@@ -373,14 +377,14 @@ export default function CourseDetailScreen() {
     switch (block.type) {
       case "image":
         return (
-          <div key={index} className="my-4 space-y-2">
+          <div key={index} className="my-4 space-y-2 fade-in">
             <img src={block.content} alt={block.caption || "Imagen"} className="w-full max-h-96 object-cover rounded-2xl border" />
             {block.caption && <p className="text-xs text-center text-gray-500 italic">{block.caption}</p>}
           </div>
         );
       case "video":
         return (
-          <div key={index} className="my-4 space-y-2">
+          <div key={index} className="my-4 space-y-2 fade-in">
             <div className="aspect-video w-full rounded-2xl overflow-hidden border bg-black">
               <iframe src={block.content} title="Video" className="w-full h-full" allowFullScreen />
             </div>
@@ -389,7 +393,7 @@ export default function CourseDetailScreen() {
         );
       case "pdf":
         return (
-          <div key={index} className="my-6">
+          <div key={index} className="my-6 fade-in">
             <div className="flex items-center justify-between p-4 bg-purple-50 rounded-t-2xl border border-b-0 border-purple-200">
               <div className="flex items-center gap-3">
                 <FileDown className="w-5 h-5 text-purple-600" />
@@ -404,7 +408,7 @@ export default function CourseDetailScreen() {
         );
       case "slides":
         return (
-          <div key={index} className="my-6">
+          <div key={index} className="my-6 fade-in">
             <div className="flex items-center justify-between p-4 bg-purple-50 rounded-t-2xl border border-b-0 border-purple-200">
               <div className="flex items-center gap-3">
                 <Presentation className="w-5 h-5 text-purple-600" />
@@ -419,7 +423,7 @@ export default function CourseDetailScreen() {
         );
       case "text":
       default:
-        return <div key={index} className="my-3 text-sm leading-relaxed text-gray-700 whitespace-pre-line">{block.content}</div>;
+        return <div key={index} className="my-3 text-sm leading-relaxed text-gray-700 whitespace-pre-line fade-in">{block.content}</div>;
     }
   }
 
@@ -455,6 +459,12 @@ export default function CourseDetailScreen() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8" ref={topRef}>
+      {/* Utilidad CSS para animar la transición del carrusel */}
+      <style>{`
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
+
       <div className="print:hidden">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-purple-600 transition-all">
           <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
@@ -487,6 +497,7 @@ export default function CourseDetailScreen() {
                       setSelectedEvalId(null);
                       setEvalResult(null);
                       setUserAnswers({});
+                      setCurrentBlockIndex(0); // Reiniciar al bloque 1 siempre
                     }}
                     disabled={isLocked}
                     className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
@@ -518,6 +529,7 @@ export default function CourseDetailScreen() {
                           setSelectedEvalId(ev.id);
                           setEvalResult(null);
                           setUserAnswers({});
+                          setCurrentBlockIndex(0);
                         }}
                         className={`w-full ml-4 p-2.5 rounded-xl border text-left flex items-center gap-2 text-xs font-bold transition-all ${
                           isEvalSelected ? "bg-amber-50 text-amber-900 border-amber-300 shadow-sm" : "bg-white text-gray-600 border-gray-100 hover:border-amber-200"
@@ -610,7 +622,7 @@ export default function CourseDetailScreen() {
                 </div>
               </div>
               
-              {/* Botones de Acciones */}
+              {/* Botones de Descarga */}
               <div className="flex flex-wrap items-center justify-center gap-3 print:hidden pt-4">
                 <button 
                   onClick={handleDownloadPDF} 
@@ -647,30 +659,75 @@ export default function CourseDetailScreen() {
               </div>
 
               {evalResult ? (
-                <div className={`p-6 rounded-2xl text-center space-y-4 ${evalResult.passed ? "bg-emerald-50 border border-emerald-100" : "bg-rose-50 border border-rose-100"}`}>
-                  <Award className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`} />
-                  <h3 className="text-lg font-bold">{evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "Necesitas un nuevo intento."}</h3>
-                  <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
-                  
-                  {evalResult.passed ? (
-                    <button onClick={() => activeModule && handleAdvanceToNextModule(activeModule.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
-                      Continuar <ChevronRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button onClick={() => { setEvalResult(null); setUserAnswers({}); }} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold">
-                      Reintentar Evaluación
-                    </button>
-                  )}
+                <div className="space-y-8 fade-in">
+                  <div className={`p-6 rounded-2xl text-center space-y-4 ${evalResult.passed ? "bg-emerald-50 border border-emerald-100" : "bg-rose-50 border border-rose-100"}`}>
+                    <Award className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`} />
+                    <h3 className="text-lg font-bold">{evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "No alcanzaste el mínimo aprobatorio."}</h3>
+                    <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
+                    
+                    {evalResult.passed ? (
+                      <button onClick={() => activeModule && handleAdvanceToNextModule(activeModule.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
+                        Continuar <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button onClick={() => { setEvalResult(null); setUserAnswers({}); }} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold">
+                        Reintentar Evaluación
+                      </button>
+                    )}
+                  </div>
+
+                  {/* SECCIÓN DE FEEDBACK */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-gray-800 border-b pb-2 uppercase tracking-wide">Revisión de tus respuestas</h3>
+                    {activeEval.preguntas.map((q, qIdx) => {
+                      const isCorrect = userAnswers[qIdx] === q.correct;
+                      return (
+                        <div key={qIdx} className={`p-5 rounded-2xl border ${isCorrect ? "bg-emerald-50/30 border-emerald-100" : "bg-rose-50/30 border-rose-100"}`}>
+                          <p className="text-sm font-bold text-gray-800 mb-3">{qIdx + 1}. {q.question}</p>
+                          <div className="space-y-2">
+                            {q.options.map((opt, optIdx) => {
+                              const isSelected = userAnswers[qIdx] === optIdx;
+                              const isActualCorrect = q.correct === optIdx;
+                              
+                              let optionClass = "bg-white border-gray-200 text-gray-500 opacity-60"; // Opción normal no elegida
+                              
+                              if (isActualCorrect) {
+                                optionClass = "bg-emerald-100 border-emerald-400 text-emerald-900 font-bold shadow-sm"; // La correcta
+                              } else if (isSelected && !isActualCorrect) {
+                                optionClass = "bg-rose-100 border-rose-300 text-rose-900 line-through"; // La que el usuario eligió y erró
+                              }
+
+                              return (
+                                <div key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border text-xs transition-all ${optionClass}`}>
+                                  <span className="flex-1">{opt}</span>
+                                  {isActualCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                                  {isSelected && !isActualCorrect && <XCircle className="w-4 h-4 text-rose-500" />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          {/* Explicación de la pregunta si el usuario falló */}
+                          {!isCorrect && q.explanation && (
+                            <div className="mt-4 p-4 bg-white rounded-xl border border-rose-100 text-xs text-gray-700 leading-relaxed shadow-sm">
+                              <span className="font-bold text-rose-700 flex items-center gap-1 mb-1"><AlertCircle className="w-4 h-4" /> Importante saber:</span>
+                              {q.explanation}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-6 fade-in">
                   {activeEval.preguntas.map((q, qIdx) => (
                     <div key={qIdx} className="space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                       <p className="text-sm font-bold text-gray-800">{qIdx + 1}. {q.question}</p>
                       <div className="space-y-2">
                         {q.options.map((opt, optIdx) => (
-                          <label key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border text-xs font-medium cursor-pointer transition-all ${userAnswers[qIdx] === optIdx ? "bg-purple-50 border-purple-300 text-purple-900" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
-                            <input type="radio" name={`quiz_q_${qIdx}`} checked={userAnswers[qIdx] === optIdx} onChange={() => handleAnswerSelect(qIdx, optIdx)} className="text-purple-600" />
+                          <label key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border text-xs font-medium cursor-pointer transition-all ${userAnswers[qIdx] === optIdx ? "bg-purple-50 border-purple-300 text-purple-900 shadow-sm" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+                            <input type="radio" name={`quiz_q_${qIdx}`} checked={userAnswers[qIdx] === optIdx} onChange={() => handleAnswerSelect(qIdx, optIdx)} className="text-purple-600 focus:ring-purple-500" />
                             <span>{opt}</span>
                           </label>
                         ))}
@@ -678,42 +735,77 @@ export default function CourseDetailScreen() {
                     </div>
                   ))}
 
-                  <button onClick={handleSubmitQuiz} disabled={Object.keys(userAnswers).length < activeEval.preguntas.length} className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-all">
+                  <button onClick={handleSubmitQuiz} disabled={Object.keys(userAnswers).length < activeEval.preguntas.length} className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-all">
                     Enviar Respuestas
                   </button>
                 </div>
               )}
             </div>
           ) : activeModule ? (
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <div className="border-b pb-4">
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-h-[600px]">
+              <div className="border-b pb-4 mb-6">
                 <span className="text-xs font-bold text-purple-600 uppercase">Módulo</span>
                 <h2 className="text-xl font-black text-gray-900">{activeModule.titulo}</h2>
               </div>
 
-              <div className="space-y-4">
+              {/* CONTENEDOR CARRUSEL */}
+              <div className="flex-1 space-y-4">
                 {!Array.isArray(activeModule.contenido) || activeModule.contenido.length === 0 ? (
                   <p className="text-xs text-gray-400 italic py-6 text-center">No hay contenido redactado para este módulo aún.</p>
                 ) : (
-                  activeModule.contenido.map((block: ContentBlock, idx: number) => renderBlock(block, idx))
+                  renderBlock(activeModule.contenido[currentBlockIndex], currentBlockIndex)
                 )}
               </div>
 
-              <div className="pt-6 border-t mt-8">
-                {completedModules.includes(activeModule.id) ? (
-                   <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="w-full py-3.5 bg-gray-800 hover:bg-gray-900 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
-                     Pasar al Siguiente Módulo <ChevronRight className="w-4 h-4" />
-                   </button>
-                ) : activeModule.evaluaciones && activeModule.evaluaciones.length > 0 ? (
-                  <button onClick={() => setSelectedEvalId(activeModule.evaluaciones[0].id)} className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
-                    <Award className="w-4 h-4" /> Presentar Evaluación del Módulo
-                  </button>
-                ) : (
-                  <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
-                    Completar y Continuar <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              {/* CONTROLES DE NAVEGACIÓN Y COMPLETACIÓN */}
+              {Array.isArray(activeModule.contenido) && activeModule.contenido.length > 0 && (
+                <div className="pt-6 border-t mt-8 flex items-center justify-between">
+                  {/* Botón Anterior */}
+                  <div className="w-1/3 text-left">
+                    <button
+                      onClick={() => setCurrentBlockIndex((prev) => Math.max(0, prev - 1))}
+                      disabled={currentBlockIndex === 0}
+                      className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 disabled:opacity-0 disabled:cursor-default transition-all flex items-center gap-1"
+                    >
+                      <ArrowLeft className="w-4 h-4" /> Anterior
+                    </button>
+                  </div>
+
+                  {/* Indicador de Progreso */}
+                  <div className="w-1/3 text-center">
+                    <span className="text-xs font-bold text-gray-400">
+                      Paso {currentBlockIndex + 1} de {activeModule.contenido.length}
+                    </span>
+                  </div>
+
+                  {/* Botón Siguiente o Acciones Finales */}
+                  <div className="w-1/3 flex justify-end">
+                    {currentBlockIndex < activeModule.contenido.length - 1 ? (
+                      <button
+                        onClick={() => setCurrentBlockIndex((prev) => Math.min(activeModule.contenido.length - 1, prev + 1))}
+                        className="px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 shadow-sm transition-all flex items-center gap-1"
+                      >
+                        Siguiente <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      /* Mostramos las acciones de completar sólo en la última página del carrusel */
+                      completedModules.includes(activeModule.id) ? (
+                        <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="px-5 py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2">
+                          Avanzar <ChevronRight className="w-4 h-4" />
+                        </button>
+                      ) : activeModule.evaluaciones && activeModule.evaluaciones.length > 0 ? (
+                        <button onClick={() => setSelectedEvalId(activeModule.evaluaciones[0].id)} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap">
+                          <Award className="w-4 h-4" /> Evaluar
+                        </button>
+                      ) : (
+                        <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap">
+                          Completar <ChevronRight className="w-4 h-4" />
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm text-center py-12">
