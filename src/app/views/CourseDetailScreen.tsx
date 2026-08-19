@@ -65,7 +65,7 @@ export default function CourseDetailScreen() {
   const [selectedModuleId, setSelectedModuleId] = useState<number | null>(null);
   const [selectedEvalId, setSelectedEvalId] = useState<number | null>(null);
   
-  // Nuevo estado para el Carrusel de contenido
+  // Estado para el Carrusel de contenido
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
 
   const [loading, setLoading] = useState(true);
@@ -181,6 +181,40 @@ export default function CourseDetailScreen() {
           }
         }
 
+        // --- INICIO LÓGICA DE AUTO-PAGINACIÓN ---
+        let finalContentBlocks: ContentBlock[] = [];
+        // Límite de caracteres por bloque (aprox. la longitud hasta tu línea roja)
+        const MAX_CHAR_LENGTH = 1200; 
+
+        if (Array.isArray(parsedContent)) {
+          parsedContent.forEach((block: any) => {
+            if (block.type === "text" && block.content && block.content.length > MAX_CHAR_LENGTH) {
+              // Picamos el texto por saltos de línea para no cortar oraciones a la mitad
+              const paragraphs = block.content.split(/\n/);
+              let currentChunk = "";
+              
+              paragraphs.forEach((p: string) => {
+                // Si añadir este párrafo supera el límite, guardamos el bloque y empezamos uno nuevo
+                if (currentChunk.length + p.length > MAX_CHAR_LENGTH && currentChunk.trim().length > 0) {
+                  finalContentBlocks.push({ type: "text", content: currentChunk.trim() });
+                  currentChunk = p + "\n";
+                } else {
+                  currentChunk += p + "\n";
+                }
+              });
+              
+              // Guardamos lo que haya quedado suelto al final
+              if (currentChunk.trim().length > 0) {
+                finalContentBlocks.push({ type: "text", content: currentChunk.trim() });
+              }
+            } else {
+              // Si no es texto o no supera el límite, lo guardamos tal cual (imágenes, videos, etc)
+              finalContentBlocks.push(block);
+            }
+          });
+        }
+        // --- FIN LÓGICA DE AUTO-PAGINACIÓN ---
+
         const modEvals = evalsData
           .filter((e) => e.modulo_id === mod.id)
           .map((e) => ({
@@ -194,7 +228,7 @@ export default function CourseDetailScreen() {
           id: mod.id,
           titulo: mod.title || mod.titulo || "Módulo sin título",
           duracion: mod.duration || mod.duracion || "45 min",
-          contenido: parsedContent,
+          contenido: finalContentBlocks, // Usamos los bloques ya fragmentados
           evaluaciones: modEvals
         };
       });
@@ -423,7 +457,8 @@ export default function CourseDetailScreen() {
         );
       case "text":
       default:
-        return <div key={index} className="my-3 text-sm leading-relaxed text-gray-700 whitespace-pre-line fade-in">{block.content}</div>;
+        // Hemos agregado text-base (para que la fuente sea un poco más legible) y justificado el texto.
+        return <div key={index} className="my-3 text-base leading-relaxed text-gray-700 whitespace-pre-line fade-in">{block.content}</div>;
     }
   }
 
