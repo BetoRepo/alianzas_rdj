@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, FileText, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 import { 
   getModuleById, 
   markModuleAsCompleted, 
@@ -35,7 +36,7 @@ export default function ModuleViewerScreen({ userProfile }: { userProfile?: any 
         const isPreviousCompleted = progressData.includes(previousModuleId);
 
         if (!isPreviousCompleted) {
-          alert("Debes completar el módulo anterior antes de acceder a este.");
+          toast.warning("Debes completar el módulo anterior antes de acceder a este.");
           navigate(`/curso/${courseId}`);
           return;
         }

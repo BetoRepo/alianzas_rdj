@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Lock, CheckCircle, Award, FileText, ArrowRight, HelpCircle, X, Play } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
 import { markModuleCompleted } from "../lib/progress";
 
@@ -62,7 +63,7 @@ export function CursoEstudianteScreen({ courseId, userId }: { courseId: number; 
 
   async function openModule(mod: any) {
     if (!unlockedModules[mod.id]) {
-      alert("Debes completar el módulo anterior antes de acceder a este.");
+      toast.warning("Debes completar el módulo anterior antes de acceder a este.");
       return;
     }
     setSelectedModule(mod);
@@ -204,7 +205,7 @@ export function CursoEstudianteScreen({ courseId, userId }: { courseId: number; 
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-3">
               <h2 className="text-xl font-bold text-gray-900">{selectedModule.title || selectedModule.titulo}</h2>
-              <button onClick={() => setSelectedModule(null)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setSelectedModule(null)} aria-label="Cerrar módulo" className="p-1 text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -227,7 +228,7 @@ export function CursoEstudianteScreen({ courseId, userId }: { courseId: number; 
                     <div key={evaluacion.id} className="bg-white p-3 rounded-xl border flex items-center justify-between text-xs font-semibold shadow-sm">
                       <span>{index + 1}. {evaluacion.titulo}</span>
                       <button 
-                        onClick={() => alert(`Iniciando evaluación: ${evaluacion.titulo}`)}
+                        onClick={() => toast.info(`Iniciando evaluación: ${evaluacion.titulo}`)}
                         className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                       >
                         Presentar Examen
@@ -241,7 +242,7 @@ export function CursoEstudianteScreen({ courseId, userId }: { courseId: number; 
                     Responde al cuestionario de comprobación de conocimientos para dar por completado este módulo.
                   </p>
                   <button
-                    onClick={() => alert("Abriendo Cuestionario de Evaluación...")}
+                    onClick={() => toast.info("Abriendo Cuestionario de Evaluación...")}
                     className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2"
                   >
                     <Play className="w-4 h-4" /> Presentar Evaluación
@@ -279,7 +280,7 @@ export function CursoEstudianteScreen({ courseId, userId }: { courseId: number; 
               <button onClick={() => setShowCertificateModal(false)} className="flex-1 py-2.5 bg-gray-100 rounded-xl font-bold text-xs text-gray-600">
                 Cerrar
               </button>
-              <button onClick={() => alert("Descargando Certificado PDF...")} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs">
+              <button onClick={() => toast.info("Descargando Certificado PDF...")} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs">
                 Descargar Certificado
               </button>
             </div>

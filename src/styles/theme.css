@@ -2,43 +2,63 @@
 
 :root {
   --font-size: 16px;
-  --background: #f0f2f8;
-  --foreground: #1a1040;
+
+  /* Scout Color Palette */
+  --scout-purple: #622599;
+  --scout-green: #27742D;
+  --scout-yellow: #FBC02D;
+  --scout-blue: #1565C0;
+  --scout-red: #C62828;
+  --scout-white-smoke: #F5F7FA;
+  --scout-slate-gray: #37474F;
+  --scout-light-gray: #CFD8DC;
+
+  /* Theme Colors */
+  --background: #F5F7FA;
+  --foreground: #37474F;
   --card: #ffffff;
-  --card-foreground: #1a1040;
+  --card-foreground: #37474F;
   --popover: #ffffff;
-  --popover-foreground: #1a1040;
-  --primary: #5b21b6;
+  --popover-foreground: #37474F;
+  --primary: #622599;
   --primary-foreground: #ffffff;
-  --secondary: #ede9fe;
-  --secondary-foreground: #4c1d95;
-  --muted: #e8eaf2;
-  --muted-foreground: #6b7280;
-  --accent: #16a34a;
+  --secondary: #27742D;
+  --secondary-foreground: #ffffff;
+  --muted: #CFD8DC;
+  --muted-foreground: #37474F;
+  --accent: #1565C0;
   --accent-foreground: #ffffff;
-  --destructive: #dc2626;
+  --destructive: #C62828;
   --destructive-foreground: #ffffff;
-  --border: rgba(91, 33, 182, 0.12);
+  --border: #CFD8DC;
   --input: transparent;
-  --input-background: #f3f0ff;
-  --switch-background: #c4b5fd;
+  --input-background: #F5F7FA;
+  --switch-background: #CFD8DC;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --ring: #7c3aed;
-  --chart-1: #7c3aed;
-  --chart-2: #16a34a;
-  --chart-3: #0ea5e9;
-  --chart-4: #f59e0b;
-  --chart-5: #ec4899;
+  --ring: #622599;
+  --chart-1: #622599;
+  --chart-2: #27742D;
+  --chart-3: #1565C0;
+  --chart-4: #FBC02D;
+  --chart-5: #C62828;
   --radius: 0.875rem;
-  --sidebar: #1e1048;
-  --sidebar-foreground: #e8e4f8;
-  --sidebar-primary: #7c3aed;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #2d1a6e;
-  --sidebar-accent-foreground: #c4b5fd;
-  --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-ring: #7c3aed;
+
+  /* Sidebar Colors */
+  --sidebar: #622599;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #622599;
+  --sidebar-accent: #4a1c75;
+  --sidebar-accent-foreground: #F5F7FA;
+  --sidebar-border: rgba(255,255,255,0.15);
+  --sidebar-ring: #FBC02D;
+
+  /* Scout Accent Colors (for tags, badges, links) */
+  --accent-yellow: #FBC02D;
+  --accent-blue: #1565C0;
+  --accent-red: #C62828;
+  --accent-green: #27742D;
 }
 
 .dark {
@@ -117,6 +137,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Scout Color Palette */
+  --color-scout-purple: #622599;
+  --color-scout-green: #27742D;
+  --color-scout-yellow: #FBC02D;
+  --color-scout-blue: #1565C0;
+  --color-scout-red: #C62828;
+  --color-scout-white-smoke: #F5F7FA;
+  --color-scout-slate-gray: #37474F;
+  --color-scout-light-gray: #CFD8DC;
 }
 
 @layer base {

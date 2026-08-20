@@ -52,6 +52,7 @@ export default function CatalogoScreen() {
           <input
             type="text"
             placeholder="Buscar curso por título..."
+            aria-label="Buscar cursos"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full text-xs pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-purple-500 shadow-sm"

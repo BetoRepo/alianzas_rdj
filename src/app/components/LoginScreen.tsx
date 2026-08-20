@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft, CheckCircle } from "lucide-react";
-import { supabase } from "../lib/supabase"; // Asegúrate de que la ruta sea correcta
+import { toast } from "sonner";
+import { supabase } from "../lib/supabase";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -39,7 +40,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
     // ─── OPCIÓN 1: SOLICITAR RECUPERACIÓN DE CONTRASEÑA ───
     if (mode === "forgot") {
-      if (!email) return alert("Por favor introduce tu correo electrónico.");
+      if (!email) return toast.warning("Por favor introduce tu correo electrónico.");
       setLoading(true);
 
       // Se envía el enlace a la raíz de la app para evitar el error 404 en Vercel
@@ -50,9 +51,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       setLoading(false);
 
       if (error) {
-        alert("Error al enviar el correo: " + error.message);
+        toast.error("Error al enviar el correo: " + error.message);
       } else {
-        alert("¡Enlace enviado! Revisa tu bandeja de entrada o spam para restablecer tu contraseña.");
+        toast.success("¡Enlace enviado! Revisa tu bandeja de entrada o spam para restablecer tu contraseña.");
         setMode("login");
       }
       return;
@@ -60,17 +61,17 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
     // ─── OPCIÓN 2: GUARDAR NUEVA CONTRASEÑA (RESET) ───
     if (mode === "reset") {
-      if (!password) return alert("Por favor ingresa una nueva contraseña.");
-      if (password !== confirmPassword) return alert("Las contraseñas no coinciden.");
+      if (!password) return toast.warning("Por favor ingresa una nueva contraseña.");
+      if (password !== confirmPassword) return toast.warning("Las contraseñas no coinciden.");
       
       setLoading(true);
       const { error } = await supabase.auth.updateUser({ password });
       setLoading(false);
 
       if (error) {
-        alert("Error al actualizar la contraseña: " + error.message);
+        toast.error("Error al actualizar la contraseña: " + error.message);
       } else {
-        alert("¡Tu contraseña ha sido actualizada con éxito! Ahora puedes iniciar sesión.");
+        toast.success("¡Tu contraseña ha sido actualizada con éxito! Ahora puedes iniciar sesión.");
         setPassword("");
         setConfirmPassword("");
         // Limpiar hash de la URL
@@ -81,13 +82,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     }
 
     // Validación base para Login y Registro
-    if (!email || !password) return alert("Por favor completa los campos.");
+    if (!email || !password) return toast.warning("Por favor completa los campos.");
     setLoading(true);
 
     if (mode === "register") {
       // ─── OPCIÓN 3: REGISTRO DE NUEVO USUARIO ───
       if (!name) {
-        alert("Por favor introduce tu nombre.");
+        toast.warning("Por favor introduce tu nombre.");
         setLoading(false);
         return;
       }
@@ -99,7 +100,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       });
 
       if (authError) {
-        alert("Error al registrar: " + authError.message);
+        toast.error("Error al registrar: " + authError.message);
       } else if (authData?.user) {
         // Generar iniciales del Avatar
         const initials = name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -114,9 +115,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         }]);
 
         if (profileError) {
-          alert("Usuario creado en Auth, pero hubo un problema al guardar el perfil: " + profileError.message);
+          toast.error("Usuario creado en Auth, pero hubo un problema al guardar el perfil: " + profileError.message);
         } else {
-          alert("¡Cuenta Scout creada con éxito! Ya puedes iniciar sesión.");
+          toast.success("¡Cuenta Scout creada con éxito! Ya puedes iniciar sesión.");
           setMode("login");
         }
       }
@@ -128,7 +129,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       });
 
       if (error) {
-        alert("Error de credenciales: " + error.message);
+        toast.error("Error de credenciales: " + error.message);
       } else if (data?.user) {
         onLogin();
       }
@@ -149,7 +150,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           {/* Encabezado e Isotipo */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-md"
-                 style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
+                    style={{ background: "linear-gradient(135deg, #622599, #4a1c75)" }}>
               <span className="text-white font-black text-xl tracking-tighter" style={{ fontFamily: "Nunito, sans-serif" }}>S</span>
             </div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight text-center" style={{ fontFamily: "Nunito, sans-serif" }}>
@@ -182,7 +183,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   <User className="w-4 h-4 text-gray-400 absolute left-4" />
                   <input required type="text" placeholder="Ej: Baden Powell" value={name} onChange={e => setName(e.target.value)}
                          className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
-                         style={{ borderColor: name ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                          style={{ borderColor: name ? "#622599" : "#e8eaf2", background: "#f8f5ff" }} />
                 </div>
               </div>
             )}
@@ -195,7 +196,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   <Mail className="w-4 h-4 text-gray-400 absolute left-4" />
                   <input required type="email" placeholder="scout@correo.com" value={email} onChange={e => setEmail(e.target.value)}
                          className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
-                         style={{ borderColor: email ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                          style={{ borderColor: email ? "#622599" : "#e8eaf2", background: "#f8f5ff" }} />
                 </div>
               </div>
             )}
@@ -217,7 +218,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   <Lock className="w-4 h-4 text-gray-400 absolute left-4" />
                   <input required type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
                          className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
-                         style={{ borderColor: password ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                          style={{ borderColor: password ? "#622599" : "#e8eaf2", background: "#f8f5ff" }} />
                 </div>
               </div>
             )}
@@ -230,7 +231,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   <Lock className="w-4 h-4 text-gray-400 absolute left-4" />
                   <input required type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
                          className="w-full pl-11 pr-4 py-3 rounded-xl border-2 text-sm outline-none transition-all"
-                         style={{ borderColor: confirmPassword ? "#7c3aed" : "#e8eaf2", background: "#f8f5ff" }} />
+                          style={{ borderColor: confirmPassword ? "#622599" : "#e8eaf2", background: "#f8f5ff" }} />
                 </div>
               </div>
             )}
@@ -238,7 +239,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             {/* Botón de Envío Dinámico */}
             <button type="submit" disabled={loading}
                     className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all mt-2 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
+                 style={{ background: "linear-gradient(135deg, #622599, #4a1c75)" }}>
               {loading ? (
                 <span className="animate-pulse">PROCESANDO...</span>
               ) : mode === "reset" ? (

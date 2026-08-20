@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Trophy, CheckCircle2, ArrowRight, Award, Compass } from "lucide-react";
-import { getCourses, getUserDashboardStats, getUserProgress } from "../lib/courses";
+import { getCourses, getUserDashboardStats } from "../lib/courses";
 
 export default function UserDashboard({ userProfile }: { userProfile: any }) {
   const navigate = useNavigate();

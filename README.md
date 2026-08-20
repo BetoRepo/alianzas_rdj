@@ -1,208 +1,242 @@
 # ⚜️ Aula Virtual Scout — Sistema de Gestión de Aprendizaje (LMS)
 
-![React](https://img.shields.io/badge/React-18-blue?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)
+![React](https://img.shields.io/badge/React-19-blue?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-emerald?logo=supabase)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.0-38bdf8?logo=tailwindcss)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.0-38bdf8?logo=tailwindcss)
 ![License](https://img.shields.io/badge/License-MIT-purple)
 
 Plataforma interactiva de educación y seguimiento del plan de adelanto Scout. Diseñada para facilitar el aprendizaje de muchachos/as de tropa y brindar herramientas completas de administración a scouters y dirigentes.
 
 ---
 
-## 📌 Tabla de Contenidos
+## Tabla de Contenidos
 
-1. [Visión General](#-visión-general)
-2. [Estructura del Proyecto](#-estructura-del-proyecto)
-3. [Tecnologías Utilizadas](#-tecnologías-utilizadas)
-4. [Módulos y Funcionalidades](#-módulos-y-funcionalidades)
-5. [Esquema de Base de Datos (Supabase)](#-esquema-de-base-de-datos-supabase)
-6. [Instalación y Configuración](#-instalación-y-configuración)
-7. [Configuración de Supabase Storage & Auth](#-configuración-de-supabase-storage--auth)
-8. [Documentación de Componentes Clave](#-documentación-de-componentes-clave)
-9. [Próximas Mejoras (Roadmap)](#-próximas-mejoras-roadmap)
-
----
-
-## 🌟 Visión General
-
-El **Aula Virtual Scout** es una aplicación web moderna orientada a la gamificación y progresión de jóvenes dentro del Movimiento Scout. Permite a los **Scouters/Dirigentes**:
-- Administrar el catálogo de especialidades, cursos e insignias.
-- Crear módulos interactivos enriquecidos con texto, imágenes, videos, presentaciones PowerPoint y documentos PDF.
-- Diseñar cuestionarios evaluativos con explicaciones didácticas.
-- Gestionar miembros, roles (Scout de Tropa, Scouter Dirigente) y accesos.
-
-Para los **Scouts**:
-- Consultar su plan de adelanto y progreso en tiempo real.
-- Acceder a material multimedia en cualquier dispositivo (adaptación web y móvil).
-- Evaluar sus conocimientos y obtener distintivos/insignias.
+1. [Visión General](#visión-general)
+2. [Stack Tecnológico](#stack-tecnológico)
+3. [Estructura del Proyecto](#estructura-del-proyecto)
+4. [Módulos y Funcionalidades](#módulos-y-funcionalidades)
+5. [Esquema de Base de Datos](#esquema-de-base-de-datos)
+6. [Instalación y Configuración](#instalación-y-configuración)
+7. [Configuración de Supabase](#configuración-de-supabase)
+8. [Accesibilidad](#accesibilidad)
+9. [Roadmap](#roadmap)
 
 ---
 
-## 📁 Estructura del Proyecto
+## Visión General
 
-Se recomienda la siguiente arquitectura modular para el directorio `src/`:
+El **Aula Virtual Scout** es una aplicación web moderna orientada a la gamificación y progresión de jóvenes dentro del Movimiento Scout.
 
-```text
-aula-virtual-scout/
-├── public/
-├── src/
-│   ├── components/            # Componentes compartidos de interfaz
-│   │   └── Sidebar.tsx        # Navegación lateral (Desktop) y Bottom Nav (Móvil)
-│   ├── lib/                   # Configuración y clientes de APIs externas
-│   │   └── supabase.ts        # Cliente inicializado de Supabase
-│   ├── screens/               # Vistas principales de la aplicación
-│   │   ├── AdminCursosScreen.tsx # Gestión de cursos, módulos, media y exámenes
-│   │   ├── AdminDashboard.tsx    # Métricas y estadísticas en tiempo real
-│   │   ├── LoginScreen.tsx       # Inicio de sesión, registro y recuperación
-│   │   └── UsersScreen.tsx       # Control de usuarios y asignación de roles
-│   ├── types/                 # Definiciones de TypeScript
-│   │   └── index.ts           # Interfaces de Curso, Módulo, Usuario, etc.
-│   ├── App.tsx                # Enrutador/Contenedor principal
-│   └── main.tsx               # Punto de entrada React
-├── .env.example               # Variables de entorno de muestra
-├── package.json
-├── tsconfig.json
-└── README.md
+**Para Scouters/Dirigentes:**
+- Administrar el catálogo de cursos e insignias
+- Crear módulos interactivos con texto, imágenes, videos, PDF y PowerPoint
+- Diseñar evaluaciones con preguntas y retroalimentación
+- Gestionar miembros, roles y accesos
+
+**Para Scouts:**
+- Consultar progreso y insignias ganadas
+- Acceder a material multimedia en cualquier dispositivo
+- Evaluar conocimientos y obtener distintivos
+
+---
+
+## Stack Tecnológico
+
+| Categoría | Tecnología |
+|-----------|------------|
+| Framework | React 19 + TypeScript |
+| Build Tool | Vite 6 |
+| Estilos | Tailwind CSS 4 |
+| Iconografía | Lucide React |
+| Animaciones | Framer Motion (`motion`) |
+| Búsqueda | cmdk |
+| Diálogos | Radix UI AlertDialog |
+| Notificaciones | Sonner (toasts) |
+| Backend | Supabase (Auth + PostgreSQL + Storage) |
+| Routing | React Router DOM 7 |
+
+---
+
+## Estructura del Proyecto
+
+```
+src/
+├── app/
+│   ├── components/
+│   │   ├── ui/                    # Componentes reutilizables
+│   │   │   ├── ConfirmDialog.tsx  # Diálogo de confirmación (Radix)
+│   │   │   ├── LoadingSpinner.tsx # Spinner + Skeleton loaders
+│   │   │   └── ...
+│   │   ├── Sidebar.tsx            # Navegación lateral colapsable
+│   │   ├── LoginScreen.tsx        # Auth: login, registro, recuperación
+│   │   ├── AdminCursosScreen.tsx  # CRUD cursos, módulos, evaluaciones
+│   │   ├── AdminDashboard.tsx     # Métricas y estadísticas
+│   │   ├── UsersScreen.tsx        # Gestión de usuarios y roles
+│   │   ├── CommandPalette.tsx     # Búsqueda rápida (⌘K)
+│   │   ├── ErrorBoundary.tsx      # Manejo de errores global
+│   │   └── ...
+│   ├── views/
+│   │   ├── UserDashboard.tsx      # Dashboard del scout
+│   │   ├── CatalogoScreen.tsx     # Catálogo de cursos disponibles
+│   │   ├── CourseDetailScreen.tsx # Detalle de curso con módulos
+│   │   ├── ModuleViewerScreen.tsx # Visor de módulos interactivos
+│   │   ├── InsigniasScreen.tsx    # Badges y progreso
+│   │   └── ProfileScreen.tsx      # Perfil de usuario
+│   ├── lib/
+│   │   ├── supabase.ts            # Cliente Supabase
+│   │   ├── courses.ts             # Funciones de cursos
+│   │   └── progress.ts            # Funciones de progreso
+│   └── App.tsx                    # Router principal + layout
+├── styles/
+│   ├── theme.css                  # Paleta de colores Scout
+│   └── index.css                  # Estilos globales + Tailwind
+└── main.tsx                       # Entry point
 ```
 
 ---
 
-## 🚀 Tecnologías Utilizadas
+## Módulos y Funcionalidades
 
-- **Frontend Core:** React 18 + TypeScript / JSX
-- **Estilos & UI:** Tailwind CSS, Lucide React (Iconografía), Fuentes personalizadas (*Nunito*, *Inter*, *JetBrains Mono*)
-- **Backend as a Service (BaaS):** Supabase
-  - **Auth:** Autenticación por Email/Contraseña y correo de recuperación.
-  - **PostgreSQL Database:** Almacenamiento relacional de usuarios, perfiles, cursos y módulos.
-  - **Storage:** Almacenamiento y servicio CDN de archivos subidos por Drag & Drop (imágenes, PDFs, PPTs).
+### 1. Autenticación (`LoginScreen.tsx`)
+- Login con email/contraseña vía Supabase Auth
+- Registro con creación automática de perfil
+- Recuperación de contraseña por email
+- Avatar generado con iniciales del usuario
 
----
+### 2. Dashboard (`AdminDashboard.tsx` / `UserDashboard.tsx`)
+- Métricas en tiempo real desde PostgreSQL
+- Conteo de usuarios, cursos, progreso
+- Vista de insignias y cursos en progreso
 
-## 🛠️ Módulos y Funcionalidades
+### 3. Gestión de Cursos (`AdminCursosScreen.tsx`)
+- CRUD completo de cursos con categorías
+- Bloques de contenido: texto, imagen, video, PDF, PowerPoint
+- Subida de archivos a Supabase Storage
+- Evaluaciones con preguntas de opción múltiple
 
-### 🔐 1. Autenticación y Perfiles (`LoginScreen.jsx`)
-- **Iniciar Sesión:** Acceso seguro con validación de credenciales.
-- **Registro Scout:** Creación de cuenta en Supabase Auth + registro automático de perfil en la tabla `perfiles` con rol por defecto `user` ("Scout de Tropa").
-- **Avatar Generativo:** Generación automática de iniciales del usuario para su foto de perfil.
-- **Recuperación de Contraseña:** Envío de enlaces de restablecimiento de contraseña por correo electrónico.
+### 4. Catálogo y Detalle (`CatalogoScreen.tsx` / `CourseDetailScreen.tsx`)
+- Listado filtrable de cursos disponibles
+- Vista detallada con módulos, duración y progreso
+- Generación de certificados al completar
 
-### 📊 2. Dashboard Administrativo (`AdminDashboard.tsx`)
-- **Conteo en Tiempo Real:** Métricas directas desde PostgreSQL (`count: 'exact'`) para usuarios registrados y cursos publicados.
-- **Indicadores Clave:** Tasa de completado, métricas de retención y nuevas inscripciones.
+### 5. Gestión de Usuarios (`UsersScreen.tsx`)
+- Buscador en tiempo real
+- Registro de nuevos miembros con roles
+- Eliminación con diálogo de confirmación
 
-### 📚 3. Gestión de Cursos y Módulos (`AdminCursosScreen.tsx`)
-- **CRUD de Cursos:** Creación, edición y eliminación de cursos categorizados (*Liderazgo, Supervivencia, Valores, Naturaleza*).
-- **Bloques de Contenido Multimedia:**
-  - **Texto:** Redacción de explicaciones y teoría.
-  - **Imágenes & Video:** Soporte para URLs externas y subida directa via **Drag & Drop** a Supabase Storage.
-  - **Diapositivas:** Soporte para archivos `.pptx` / `.ppt`.
-  - **Documentos PDF:** Visor integrado dentro del módulo.
-- **Evaluaciones Interactivas (Quiz):**
-  - Preguntas con selección de respuesta correcta (opciones 1 a 4).
-  - Explicaciones pedagógicas tras responder.
-
-### 👥 4. Gestión de Usuarios (`UsersScreen.tsx`)
-- **Buscador en Tiempo Real:** Filtro de usuarios por nombre o correo electrónico.
-- **Gestión de Roles:** Modal para registrar nuevos miembros asignando roles de **Scout de Tropa** o **Administradora (Scouter Dirigente)**.
-- **Control de Acceso:** Eliminación y suspensión de perfiles.
-
-### 📱 5. Navegación Adaptativa (`Sidebar.jsx`)
-- **Escritorio:** Barra lateral completa con logotipo, ítems del menú y botón de cierre de sesión.
-- **Dispositivos Móviles:** *Bottom Navigation Bar* fija en la parte inferior para navegación táctil fluida.
-- **Filtrado por Rol:** Renderizado dinámico del menú según si el usuario es `admin` o `user`.
+### 6. Navegación (`Sidebar.tsx`)
+- Sidebar colapsable (aparece al hover en escritorio)
+- Bottom nav fijo en móvil
+- Filtrado dinámico por rol
+- Atajo ⌘K para búsqueda rápida
 
 ---
 
-## 🗄️ Esquema de Base de Datos (Supabase)
+## Esquema de Base de Datos
 
 ### Tabla: `perfiles`
 | Campo | Tipo | Descripción |
-| :--- | :--- | :--- |
-| `id` | `UUID` (PK, FK) | ID coincidente con `auth.users.id` |
-| `name` | `TEXT` | Nombre completo del usuario |
-| `email` | `TEXT` | Correo electrónico institucional |
-| `role` | `TEXT` | `'admin'` \| `'user'` |
-| `role_label` | `TEXT` | Ej: `"Scouter Dirigente"` o `"Scout de Tropa"` |
-| `avatar` | `TEXT` | Iniciales o URL de imagen de perfil |
-| `created_at` | `TIMESTAMP` | Fecha de creación del registro |
+|-------|------|-------------|
+| `id` | UUID (PK, FK) | Coincide con `auth.users.id` |
+| `name` | TEXT | Nombre completo |
+| `email` | TEXT | Correo electrónico |
+| `role` | TEXT | `admin` o `user` |
+| `role_label` | TEXT | Ej: "Scouter Dirigente" |
+| `avatar` | TEXT | Iniciales o URL |
+| `created_at` | TIMESTAMP | Fecha de creación |
 
 ### Tabla: `cursos`
 | Campo | Tipo | Descripción |
-| :--- | :--- | :--- |
-| `id` | `BIGINT` (PK) | Identificador único incremental |
-| `title` | `TEXT` | Título del curso o insignia |
-| `category` | `TEXT` | Categoría (Liderazgo, Supervivencia, etc.) |
-| `description` | `TEXT` | Resumen del plan de estudios |
-| `duration` | `TEXT` | Duración estimada (Ej: "6 semanas") |
-| `img` | `TEXT` | URL de la portada del curso |
-| `rating` | `NUMERIC` | Calificación promedio |
-| `created_at` | `TIMESTAMP` | Fecha de creación |
+|-------|------|-------------|
+| `id` | BIGINT (PK) | ID incremental |
+| `titulo` / `title` | TEXT | Título del curso |
+| `categoria` / `category` | TEXT | Categoría |
+| `descripcion` / `description` | TEXT | Resumen |
+| `duracion` / `duration` | TEXT | Duración estimada |
+| `imagen_url` / `cover_image` | TEXT | URL de portada |
+| `created_at` | TIMESTAMP | Fecha de creación |
 
 ### Tabla: `modulos`
 | Campo | Tipo | Descripción |
-| :--- | :--- | :--- |
-| `id` | `BIGINT` (PK) | Identificador del módulo |
-| `curso_id` | `BIGINT` (FK) | Relación con `cursos.id` |
-| `title` | `TEXT` | Nombre del módulo |
-| `duration` | `TEXT` | Duración estimada (Ej: "45 min") |
-| `content` | `JSONB / TEXT` | Array serializado de bloques de contenido |
-| `quiz` | `JSONB / TEXT` | Array serializado de preguntas y respuestas |
-| `orden` | `INT` | Secuencia del módulo dentro del curso |
+|-------|------|-------------|
+| `id` | BIGINT (PK) | ID del módulo |
+| `curso_id` | BIGINT (FK) | Relación con cursos |
+| `titulo` / `title` | TEXT | Nombre del módulo |
+| `duracion` / `duration` | TEXT | Duración estimada |
+| `contenido` / `content` | JSONB | Bloques de contenido |
+| `evaluacion` / `quiz` | JSONB | Preguntas y respuestas |
+| `orden` | INT | Secuencia en el curso |
+
+### Tabla: `progreso_modulo`
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `user_id` | UUID (FK) | Relación con perfiles |
+| `module_id` | BIGINT (FK) | Relación con módulos |
+| `completed_at` | TIMESTAMP | Fecha de finalización |
 
 ---
 
-## ⚡ Instalación y Configuración
+## Instalación y Configuración
 
-### 1. Clonar el repositorio
 ```bash
+# Clonar
 git clone https://github.com/tu-usuario/aula-virtual-scout.git
 cd aula-virtual-scout
-```
 
-### 2. Instalar dependencias
-```bash
+# Instalar
 npm install
-```
 
-### 3. Configurar variables de entorno
-Crea un archivo `.env.local` en la raíz del proyecto con tus credenciales de Supabase:
+# Configurar .env.local
+echo "VITE_SUPABASE_URL=tu-url" > .env.local
+echo "VITE_SUPABASE_ANON_KEY=tu-key" >> .env.local
 
-```env
-VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
-VITE_SUPABASE_ANON_KEY=tu-anon-key-de-supabase
-```
-
-### 4. Ejecutar el servidor de desarrollo
-```bash
+# Ejecutar
 npm run dev
 ```
 
 ---
 
-## ☁️ Configuración de Supabase Storage & Auth
+## Configuración de Supabase
 
-1. **Bucket de Almacenamiento:**
-   - Crear un bucket en Supabase Storage llamado `scout-storage` (o el configurado en `DEFAULT_STORAGE_BUCKET`).
-   - Marcar el bucket como **Public** para que los recursos multimedia cargados en los bloques sean accesibles por los estudiantes.
-
-2. **Políticas RLS (Row Level Security):**
-   - Asegurar políticas de **Lectura (`SELECT`)** pública para la tabla `cursos` y `modulos`.
-   - Permitir **Escritura (`INSERT`, `UPDATE`, `DELETE`)** únicamente a usuarios cuyo `role = 'admin'` en la tabla `perfiles`.
+1. **Storage Bucket:** Crear bucket `scout-storage` (público)
+2. **RLS Policies:**
+   - SELECT público para `cursos` y `modulos`
+   - INSERT/UPDATE/DELETE solo para `role = 'admin'`
 
 ---
 
-## 🧪 Próximas Mejoras (Roadmap)
+## Accesibilidad
 
-- [ ] Migrar totalmente `LoginScreen.jsx` y `Sidebar.jsx` a TypeScript (`.tsx`).
-- [ ] Implementar sistema de certificados/diplomas descargables en PDF al completar un curso.
-- [ ] Añadir barra de progreso porcentual del alumno por insignia/módulo.
-- [ ] Integrar notificaciones en tiempo real para eventos de tropa o entregas de tareas.
+- **ARIA labels** en todos los botones solo-icono e inputs
+- **Focus trap** en modales y paleta de comandos
+- **LoadingSpinner** con estados de carga claros
+- **ErrorBoundary** global para manejo de errores
+- **Navegación por teclado** completa
+- **Semantic HTML** con roles ARIA apropiados
 
 ---
 
-## 📄 Licencia
+## Roadmap
 
-Este proyecto se distribuye bajo la licencia **MIT**. Siéntete libre de adaptarlo y usarlo para tu Grupo Scout o comunidad educativa.
+- [x] Paleta de colores Scout unificada
+- [x] Sidebar colapsable con persistencia
+- [x] Notificaciones con Sonner (reemplazo de alert())
+- [x] Vista de insignias y progreso
+- [x] Diálogos de confirmación con Radix UI
+- [x] Barra de búsqueda con cmdk (⌘K)
+- [x] Animaciones de transición con Framer Motion
+- [x] Code splitting con React.lazy()
+- [x] ARIA labels y focus trap
+- [ ] Modo offline con Service Worker
+- [ ] Exportar progreso a PDF
+- [ ] Sistema de notificaciones push
+- [ ] Dashboard con gráficos (Recharts)
+
+---
+
+## Licencia
+
+Proyecto distribuido bajo licencia **MIT**. Adaptalo para tu Grupo Scout o comunidad educativa.
 
 *¡Siempre Listos!* ⚜️

@@ -20,7 +20,7 @@ export function AdminDashboard() {
   }, []);
 
   const stats = [
-    { label: "Usuarios Activos", value: loading ? "..." : totalUsers.toString(), trend: "Base de Datos", icon: <Users className="w-5 h-5" />, color: "#7c3aed", bg: "#f3f0ff" },
+    { label: "Usuarios Activos", value: loading ? "..." : totalUsers.toString(), trend: "Base de Datos", icon: <Users className="w-5 h-5" />, color: "#622599", bg: "#f3f0ff" },
     { label: "Cursos Publicados", value: loading ? "..." : totalCourses.toString(), trend: "Global", icon: <BarChart2 className="w-5 h-5" />, color: "#16a34a", bg: "#f0fdf4" },
     { label: "Nuevas Inscripciones", value: "0", trend: "7 días", icon: <UserPlus className="w-5 h-5" />, color: "#0ea5e9", bg: "#f0f9ff" },
     { label: "Tasa de Completado", value: "100%", trend: "Estable", icon: <TrendingUp className="w-5 h-5" />, color: "#f59e0b", bg: "#fffbeb" },

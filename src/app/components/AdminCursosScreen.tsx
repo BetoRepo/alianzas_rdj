@@ -2,7 +2,10 @@
 import {
   PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp
 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase, DEFAULT_STORAGE_BUCKET } from "../lib/supabase";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
+import { LoadingSpinner } from "./ui/LoadingSpinner";
 
 // Interfaces de Evaluaciones y Contenido
 interface QuizItem {
@@ -94,6 +97,10 @@ export default function AdminCursosScreen() {
   const [moduleForm, setModuleForm] = useState<ModuleForm | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Estados para ConfirmDialog
+  const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<{ open: boolean; courseId: string | null }>({ open: false, courseId: null });
+  const [deleteModuleConfirm, setDeleteModuleConfirm] = useState<{ open: boolean; moduleId: number | null }>({ open: false, moduleId: null });
+
   useEffect(() => {
     void fetchCourses();
   }, []);
@@ -114,7 +121,7 @@ export default function AdminCursosScreen() {
   // 2. CREAR CURSO
   async function handleCreateCourse(e: FormEvent) {
     e.preventDefault();
-    if (!newCourse.title.trim()) return alert("El título es requerido");
+    if (!newCourse.title.trim()) return toast.warning("El título es requerido");
 
     const { error } = await supabase.from("cursos").insert([
       {
@@ -128,7 +135,7 @@ export default function AdminCursosScreen() {
     ]);
 
     if (error) {
-      alert("Error al crear curso: " + error.message);
+      toast.error("Error al crear curso: " + error.message);
     } else {
       setNewCourse({
         title: "",
@@ -143,9 +150,8 @@ export default function AdminCursosScreen() {
 
   // 3. ELIMINAR CURSO
   async function handleDeleteCourse(id: number) {
-    if (!confirm("¿Seguro que deseas eliminar este curso? Se eliminarán sus módulos y evaluaciones.")) return;
     const { error } = await supabase.from("cursos").delete().eq("id", id);
-    if (error) alert("Error al eliminar curso: " + error.message);
+    if (error) toast.error("Error al eliminar curso: " + error.message);
     else {
       if (activeCourse?.id === id) setActiveCourse(null);
       void fetchCourses();
@@ -233,7 +239,7 @@ export default function AdminCursosScreen() {
 // 6. GUARDAR MÓDULO (Ajustado a las columnas exactas de Supabase)
   async function handleSaveModule() {
     if (!activeCourse || !moduleForm) return;
-    if (!moduleForm.title.trim()) return alert("El título del módulo es obligatorio.");
+    if (!moduleForm.title.trim()) return toast.warning("El título del módulo es obligatorio.");
 
     setUploading(true);
     try {
@@ -323,21 +329,20 @@ export default function AdminCursosScreen() {
         await supabase.from("evaluaciones").delete().in("id", toDeleteIds);
       }
 
-      alert("¡Módulo y evaluaciones guardados exitosamente!");
+      toast.success("¡Módulo y evaluaciones guardados exitosamente!");
       setModuleForm(null);
       setEditingModuleId(null);
       void fetchModules(activeCourse.id);
     } catch (err: any) {
-      alert("Error al guardar: " + (err.message || err));
+      toast.error("Error al guardar: " + (err.message || err));
     } finally {
       setUploading(false);
     }
   }
   // 7. ELIMINAR MÓDULO
   async function handleDeleteModule(moduloId: number) {
-    if (!confirm("¿Deseas eliminar este módulo?")) return;
     const { error } = await supabase.from("modulos").delete().eq("id", moduloId);
-    if (error) alert("Error al eliminar módulo: " + error.message);
+    if (error) toast.error("Error al eliminar módulo: " + error.message);
     else if (activeCourse) void fetchModules(activeCourse.id);
   }
 
@@ -365,7 +370,7 @@ export default function AdminCursosScreen() {
         setModuleForm({ ...moduleForm, blocks: updatedBlocks });
       }
     } catch (err: any) {
-      alert("Error subiendo archivo: " + err.message);
+      toast.error("Error subiendo archivo: " + err.message);
     } finally {
       setUploading(false);
     }
@@ -447,7 +452,9 @@ export default function AdminCursosScreen() {
       {/* LISTA DE CURSOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          <p className="text-sm text-gray-400 col-span-full">Cargando catálogo de cursos...</p>
+          <div className="col-span-full flex justify-center py-10">
+            <LoadingSpinner text="Cargando catálogo de cursos..." />
+          </div>
         ) : (
           courses.map((course) => {
             const courseTitle = course.titulo || course.title;
@@ -476,7 +483,8 @@ export default function AdminCursosScreen() {
                     <Layers className="w-4 h-4" /> Módulos y Evaluaciones
                   </button>
                   <button
-                    onClick={() => handleDeleteCourse(course.id)}
+                    onClick={() => setDeleteCourseConfirm({ open: true, courseId: course.id })}
+                    aria-label={`Eliminar curso ${course.titulo}`}
                     className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -497,7 +505,7 @@ export default function AdminCursosScreen() {
                 <span className="text-xs font-bold text-purple-600 uppercase">Gestión de Curso</span>
                 <h2 className="text-xl font-black text-gray-900">{activeCourse.titulo || activeCourse.title}</h2>
               </div>
-              <button onClick={() => setActiveCourse(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl">
+              <button onClick={() => setActiveCourse(null)} aria-label="Cerrar gestión de módulos" className="p-2 text-gray-400 hover:text-gray-600 rounded-xl">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -535,7 +543,8 @@ export default function AdminCursosScreen() {
                             <Edit2 className="w-3.5 h-3.5" /> Editar
                           </button>
                           <button
-                            onClick={() => handleDeleteModule(mod.id)}
+                            onClick={() => setDeleteModuleConfirm({ open: true, moduleId: mod.id })}
+                            aria-label={`Eliminar módulo ${mod.titulo}`}
                             className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-xl"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -612,6 +621,7 @@ export default function AdminCursosScreen() {
                             const newBlocks = moduleForm.blocks.filter((_, i) => i !== idx);
                             setModuleForm({ ...moduleForm, blocks: newBlocks });
                           }}
+                          aria-label={`Eliminar bloque ${idx + 1}`}
                           className="text-rose-500 hover:text-rose-700"
                         >
                           <X className="w-4 h-4" />
@@ -622,6 +632,7 @@ export default function AdminCursosScreen() {
                         <textarea
                           rows={3}
                           placeholder="Escribe el contenido de este bloque..."
+                          aria-label="Contenido del bloque de texto"
                           value={block.content}
                           onChange={(e) => {
                             const b = [...moduleForm.blocks];
@@ -655,6 +666,7 @@ export default function AdminCursosScreen() {
                             <input
                               type="text"
                               placeholder="Leyenda / Título corto (opcional)"
+                              aria-label="Leyenda del bloque"
                               value={block.caption || ""}
                               onChange={(e) => {
                                 const b = [...moduleForm.blocks];
@@ -698,6 +710,7 @@ export default function AdminCursosScreen() {
                         <input
                           type="text"
                           placeholder="Título de la Evaluación"
+                          aria-label="Título de la evaluación"
                           value={evaluacion.titulo}
                           onChange={(e) => {
                             const evs = [...moduleForm.evaluaciones];
@@ -714,6 +727,7 @@ export default function AdminCursosScreen() {
                               type="number"
                               min="0"
                               max="100"
+                              aria-label="Puntaje mínimo para aprobar"
                               value={evaluacion.min_score}
                               onChange={(e) => {
                                 const evs = [...moduleForm.evaluaciones];
@@ -731,6 +745,7 @@ export default function AdminCursosScreen() {
                                 const evs = moduleForm.evaluaciones.filter((_, i) => i !== evalIdx);
                                 setModuleForm({ ...moduleForm, evaluaciones: evs });
                               }}
+                              aria-label={`Eliminar evaluación ${evalIdx + 1}`}
                               className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -751,6 +766,7 @@ export default function AdminCursosScreen() {
                                   evs[evalIdx].preguntas = evs[evalIdx].preguntas.filter((_, i) => i !== qIdx);
                                   setModuleForm({ ...moduleForm, evaluaciones: evs });
                                 }}
+                                aria-label={`Eliminar pregunta ${qIdx + 1}`}
                                 className="text-rose-500"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -760,6 +776,7 @@ export default function AdminCursosScreen() {
                             <input
                               type="text"
                               placeholder="Pregunta..."
+                              aria-label="Texto de la pregunta"
                               value={q.question}
                               onChange={(e) => {
                                 const evs = [...moduleForm.evaluaciones];
@@ -776,6 +793,7 @@ export default function AdminCursosScreen() {
                                     type="radio"
                                     name={`correct_${evalIdx}_${qIdx}`}
                                     checked={q.correct === optIdx}
+                                    aria-label={`Marcar opción ${optIdx + 1} como correcta`}
                                     onChange={() => {
                                       const evs = [...moduleForm.evaluaciones];
                                       evs[evalIdx].preguntas[qIdx].correct = optIdx;
@@ -785,6 +803,7 @@ export default function AdminCursosScreen() {
                                   <input
                                     type="text"
                                     placeholder={`Opción ${optIdx + 1}`}
+                                    aria-label={`Texto de la opción ${optIdx + 1}`}
                                     value={opt}
                                     onChange={(e) => {
                                       const evs = [...moduleForm.evaluaciones];
@@ -834,6 +853,32 @@ export default function AdminCursosScreen() {
           </div>
         </div>
       )}
+
+      {/* Confirm Dialogs */}
+      <ConfirmDialog
+        open={deleteCourseConfirm.open}
+        onOpenChange={(open) => setDeleteCourseConfirm({ ...deleteCourseConfirm, open })}
+        title="Eliminar Curso"
+        description="¿Seguro que deseas eliminar este curso? Se eliminarán sus módulos y evaluaciones. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        onConfirm={() => {
+          if (deleteCourseConfirm.courseId) handleDeleteCourse(Number(deleteCourseConfirm.courseId));
+          setDeleteCourseConfirm({ open: false, courseId: null });
+        }}
+      />
+      <ConfirmDialog
+        open={deleteModuleConfirm.open}
+        onOpenChange={(open) => setDeleteModuleConfirm({ ...deleteModuleConfirm, open })}
+        title="Eliminar Módulo"
+        description="¿Deseas eliminar este módulo? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        onConfirm={() => {
+          if (deleteModuleConfirm.moduleId) handleDeleteModule(deleteModuleConfirm.moduleId);
+          setDeleteModuleConfirm({ open: false, moduleId: null });
+        }}
+      />
     </div>
   );
 }
