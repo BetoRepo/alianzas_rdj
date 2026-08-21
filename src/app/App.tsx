@@ -66,7 +66,7 @@ export default function App() {
     if (!error && data) {
       setProfile(data);
     } else {
-      setProfile({ name: "Scout", email: "", role: "user", role_label: "Miembro Activo", avatar: "S" });
+      setProfile({ id: userId, name: "Scout", email: "", role: "user", role_label: "Miembro Activo", avatar: "S" });
     }
     setLoading(false);
   }
@@ -80,7 +80,12 @@ export default function App() {
   }
 
   if (!session || !profile) {
-    return <LoginScreen onLogin={() => {}} />;
+    return (
+      <>
+        <Toaster position="top-right" richColors />
+        <LoginScreen onLogin={() => {}} />
+      </>
+    );
   }
 
   const currentPath = location.pathname.split("/")[1] || "dashboard";
@@ -101,7 +106,7 @@ export default function App() {
         onLogout={() => supabase.auth.signOut()}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 w-full lg:p-4">
+      <main className="flex-1 flex flex-col min-w-0 w-full lg:pl-1 lg:pr-4 lg:py-4">
         <header className="bg-white border-b lg:border-none lg:rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm sticky top-0 z-20 lg:mt-2">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white" style={{ background: "linear-gradient(135deg, #622599, #4a1c75)" }}>

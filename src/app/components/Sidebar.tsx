@@ -47,7 +47,7 @@ export default function Sidebar({ role, currentScreen, onNavigate, onLogout }: S
         }}
       >
         {/* Logotipo superior + toggle */}
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between overflow-hidden">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div
               className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-sm flex-shrink-0"
