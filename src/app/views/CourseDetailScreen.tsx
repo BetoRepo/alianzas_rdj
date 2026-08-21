@@ -12,7 +12,8 @@ import {
   Printer,
   Download,
   FileImage,
-  XCircle
+  XCircle,
+  BookOpen
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import html2canvas from "html2canvas";
@@ -183,18 +184,15 @@ export default function CourseDetailScreen() {
 
         // --- INICIO LÓGICA DE AUTO-PAGINACIÓN ---
         let finalContentBlocks: ContentBlock[] = [];
-        // Límite de caracteres por bloque (aprox. la longitud hasta tu línea roja)
         const MAX_CHAR_LENGTH = 1200; 
 
         if (Array.isArray(parsedContent)) {
           parsedContent.forEach((block: any) => {
             if (block.type === "text" && block.content && block.content.length > MAX_CHAR_LENGTH) {
-              // Picamos el texto por saltos de línea para no cortar oraciones a la mitad
               const paragraphs = block.content.split(/\n/);
               let currentChunk = "";
               
               paragraphs.forEach((p: string) => {
-                // Si añadir este párrafo supera el límite, guardamos el bloque y empezamos uno nuevo
                 if (currentChunk.length + p.length > MAX_CHAR_LENGTH && currentChunk.trim().length > 0) {
                   finalContentBlocks.push({ type: "text", content: currentChunk.trim() });
                   currentChunk = p + "\n";
@@ -203,12 +201,10 @@ export default function CourseDetailScreen() {
                 }
               });
               
-              // Guardamos lo que haya quedado suelto al final
               if (currentChunk.trim().length > 0) {
                 finalContentBlocks.push({ type: "text", content: currentChunk.trim() });
               }
             } else {
-              // Si no es texto o no supera el límite, lo guardamos tal cual (imágenes, videos, etc)
               finalContentBlocks.push(block);
             }
           });
@@ -228,7 +224,7 @@ export default function CourseDetailScreen() {
           id: mod.id,
           titulo: mod.title || mod.titulo || "Módulo sin título",
           duracion: mod.duration || mod.duracion || "45 min",
-          contenido: finalContentBlocks, // Usamos los bloques ya fragmentados
+          contenido: finalContentBlocks,
           evaluaciones: modEvals
         };
       });
@@ -374,7 +370,7 @@ export default function CourseDetailScreen() {
       setSelectedEvalId(null);
       setEvalResult(null);
       setUserAnswers({});
-      setCurrentBlockIndex(0); // Reiniciar el carrusel para el nuevo módulo
+      setCurrentBlockIndex(0);
     } else {
       setShowCertificate(true);
     }
@@ -457,7 +453,6 @@ export default function CourseDetailScreen() {
         );
       case "text":
       default:
-        // Hemos agregado text-base (para que la fuente sea un poco más legible) y justificado el texto.
         return <div key={index} className="my-3 text-base leading-relaxed text-gray-700 whitespace-pre-line fade-in">{block.content}</div>;
     }
   }
@@ -494,7 +489,6 @@ export default function CourseDetailScreen() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8" ref={topRef}>
-      {/* Utilidad CSS para animar la transición del carrusel */}
       <style>{`
         .fade-in { animation: fadeIn 0.4s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -532,7 +526,7 @@ export default function CourseDetailScreen() {
                       setSelectedEvalId(null);
                       setEvalResult(null);
                       setUserAnswers({});
-                      setCurrentBlockIndex(0); // Reiniciar al bloque 1 siempre
+                      setCurrentBlockIndex(0);
                     }}
                     disabled={isLocked}
                     className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
@@ -705,8 +699,17 @@ export default function CourseDetailScreen() {
                         Continuar <ChevronRight className="w-4 h-4" />
                       </button>
                     ) : (
-                      <button onClick={() => { setEvalResult(null); setUserAnswers({}); }} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold">
-                        Reintentar Evaluación
+                      /* REDIRECCIÓN AL MÓDULO CUANDO FALLAN */
+                      <button 
+                        onClick={() => { 
+                          setSelectedEvalId(null);
+                          setEvalResult(null);
+                          setUserAnswers({});
+                          setCurrentBlockIndex(0);
+                        }} 
+                        className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-purple-200 transition-all inline-flex items-center gap-2 mx-auto"
+                      >
+                        <BookOpen className="w-4 h-4" /> Repasar Módulo
                       </button>
                     )}
                   </div>
@@ -724,12 +727,12 @@ export default function CourseDetailScreen() {
                               const isSelected = userAnswers[qIdx] === optIdx;
                               const isActualCorrect = q.correct === optIdx;
                               
-                              let optionClass = "bg-white border-gray-200 text-gray-500 opacity-60"; // Opción normal no elegida
+                              let optionClass = "bg-white border-gray-200 text-gray-500 opacity-60";
                               
                               if (isActualCorrect) {
-                                optionClass = "bg-emerald-100 border-emerald-400 text-emerald-900 font-bold shadow-sm"; // La correcta
+                                optionClass = "bg-emerald-100 border-emerald-400 text-emerald-900 font-bold shadow-sm";
                               } else if (isSelected && !isActualCorrect) {
-                                optionClass = "bg-rose-100 border-rose-300 text-rose-900 line-through"; // La que el usuario eligió y erró
+                                optionClass = "bg-rose-100 border-rose-300 text-rose-900 line-through";
                               }
 
                               return (
@@ -742,7 +745,6 @@ export default function CourseDetailScreen() {
                             })}
                           </div>
                           
-                          {/* Explicación de la pregunta si el usuario falló */}
                           {!isCorrect && q.explanation && (
                             <div className="mt-4 p-4 bg-white rounded-xl border border-rose-100 text-xs text-gray-700 leading-relaxed shadow-sm">
                               <span className="font-bold text-rose-700 flex items-center gap-1 mb-1"><AlertCircle className="w-4 h-4" /> Importante saber:</span>
@@ -823,7 +825,6 @@ export default function CourseDetailScreen() {
                         Siguiente <ChevronRight className="w-4 h-4" />
                       </button>
                     ) : (
-                      /* Mostramos las acciones de completar sólo en la última página del carrusel */
                       completedModules.includes(activeModule.id) ? (
                         <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="px-5 py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2">
                           Avanzar <ChevronRight className="w-4 h-4" />
