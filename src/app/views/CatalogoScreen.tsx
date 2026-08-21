@@ -77,7 +77,10 @@ export default function CatalogoScreen() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCourses.map((course) => {
             const title = course.titulo || course.title;
-            const desc = course.descripcion || course.summary;
+            const rawDesc = course.descripcion || course.summary;
+            const desc = rawDesc && rawDesc.trim().length > 0
+              ? rawDesc
+              : "Explora este módulo para adquirir nuevas habilidades y fortalezas en tu área Scout.";
             const duration = course.duracion || course.duration || "1 hora";
             const cover = course.imagen_url || course.cover_image;
 
@@ -108,7 +111,7 @@ export default function CatalogoScreen() {
                     {title}
                   </h3>
                   <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
-                    {desc || "Sin descripción disponible."}
+                    {desc}
                   </p>
                 </div>
 

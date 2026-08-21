@@ -1,13 +1,12 @@
 ﻿import { useState, useEffect, type FormEvent } from "react";
 import {
-  PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp
+  PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp, HelpCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase, DEFAULT_STORAGE_BUCKET } from "../lib/supabase";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { LoadingSpinner } from "./ui/LoadingSpinner";
 
-// Interfaces de Evaluaciones y Contenido
 interface QuizItem {
   question: string;
   options: string[];
@@ -35,7 +34,6 @@ interface ModuleForm {
   evaluaciones: EvaluationForm[];
 }
 
-// Helpers de Inicialización
 function createDefaultQuestion(): QuizItem {
   return { question: "", options: ["", "", "", ""], correct: 0, explanation: "" };
 }
@@ -79,7 +77,6 @@ function buildQuizPayload(preguntas: QuizItem[]) {
 }
 
 export default function AdminCursosScreen() {
-  // Estados para Cursos
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newCourse, setNewCourse] = useState({
@@ -90,7 +87,6 @@ export default function AdminCursosScreen() {
     category: "General"
   });
 
-  // Estados para Módulos y Evaluaciones
   const [activeCourse, setActiveCourse] = useState<any | null>(null);
   const [modules, setModules] = useState<any[]>([]);
   const [editingModuleId, setEditingModuleId] = useState<number | null>(null);
@@ -105,7 +101,6 @@ export default function AdminCursosScreen() {
     void fetchCourses();
   }, []);
 
-  // 1. CARGAR CURSOS
   async function fetchCourses() {
     setLoading(true);
     const { data, error } = await supabase
@@ -118,7 +113,6 @@ export default function AdminCursosScreen() {
     setLoading(false);
   }
 
-  // 2. CREAR CURSO
   async function handleCreateCourse(e: FormEvent) {
     e.preventDefault();
     if (!newCourse.title.trim()) return toast.warning("El título es requerido");
@@ -148,7 +142,6 @@ export default function AdminCursosScreen() {
     }
   }
 
-  // 3. ELIMINAR CURSO
   async function handleDeleteCourse(id: number) {
     const { error } = await supabase.from("cursos").delete().eq("id", id);
     if (error) toast.error("Error al eliminar curso: " + error.message);
@@ -158,7 +151,6 @@ export default function AdminCursosScreen() {
     }
   }
 
-  // 4. ABRIR GESTIÓN DE MÓDULOS
   async function handleManageModules(course: any) {
     setActiveCourse(course);
     setModuleForm(null);
@@ -177,7 +169,6 @@ export default function AdminCursosScreen() {
     else setModules(data || []);
   }
 
-  // 5. EDICIÓN / CREACIÓN DE MÓDULO
   async function handleOpenEditModule(mod: any) {
     setEditingModuleId(mod.id);
 
@@ -236,7 +227,6 @@ export default function AdminCursosScreen() {
     });
   }
 
-// 6. GUARDAR MÓDULO (Ajustado a las columnas exactas de Supabase)
   async function handleSaveModule() {
     if (!activeCourse || !moduleForm) return;
     if (!moduleForm.title.trim()) return toast.warning("El título del módulo es obligatorio.");
@@ -246,7 +236,6 @@ export default function AdminCursosScreen() {
       const contentPayload = JSON.stringify(normalizeBlocks(moduleForm.blocks));
       let moduloId = editingModuleId;
 
-      // Se asignan las llaves exactas con los nombres de la base de datos ('title', 'duration', 'content')
       const modulePayload = {
         curso_id: activeCourse.id,
         title: moduleForm.title,
@@ -278,7 +267,6 @@ export default function AdminCursosScreen() {
         moduloId = newMod.id;
       }
 
-      // Sincronizar Evaluaciones
       const { data: currentEvals } = await supabase
         .from("evaluaciones")
         .select("id")
@@ -339,14 +327,13 @@ export default function AdminCursosScreen() {
       setUploading(false);
     }
   }
-  // 7. ELIMINAR MÓDULO
+
   async function handleDeleteModule(moduloId: number) {
     const { error } = await supabase.from("modulos").delete().eq("id", moduloId);
     if (error) toast.error("Error al eliminar módulo: " + error.message);
     else if (activeCourse) void fetchModules(activeCourse.id);
   }
 
-  // SUBIDA DE ARCHIVOS
   async function handleFileUpload(file: File, blockIndex: number) {
     setUploading(true);
     try {
@@ -757,7 +744,7 @@ export default function AdminCursosScreen() {
                       {/* PREGUNTAS */}
                       <div className="space-y-3 pl-2">
                         {evaluacion.preguntas.map((q, qIdx) => (
-                          <div key={qIdx} className="p-3 bg-white rounded-xl border space-y-2 text-xs">
+                          <div key={qIdx} className="p-3 bg-white rounded-xl border space-y-3 text-xs">
                             <div className="flex items-center justify-between">
                               <span className="font-bold text-gray-700">Pregunta #{qIdx + 1}</span>
                               <button
@@ -767,7 +754,7 @@ export default function AdminCursosScreen() {
                                   setModuleForm({ ...moduleForm, evaluaciones: evs });
                                 }}
                                 aria-label={`Eliminar pregunta ${qIdx + 1}`}
-                                className="text-rose-500"
+                                className="text-rose-500 hover:text-rose-700"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -775,7 +762,7 @@ export default function AdminCursosScreen() {
 
                             <input
                               type="text"
-                              placeholder="Pregunta..."
+                              placeholder="Escribe la pregunta..."
                               aria-label="Texto de la pregunta"
                               value={q.question}
                               onChange={(e) => {
@@ -783,7 +770,7 @@ export default function AdminCursosScreen() {
                                 evs[evalIdx].preguntas[qIdx].question = e.target.value;
                                 setModuleForm({ ...moduleForm, evaluaciones: evs });
                               }}
-                              className="w-full p-2 border rounded-lg font-medium"
+                              className="w-full p-2 border rounded-lg font-medium outline-none focus:border-purple-500"
                             />
 
                             <div className="grid grid-cols-2 gap-2 pt-1">
@@ -815,6 +802,25 @@ export default function AdminCursosScreen() {
                                 </div>
                               ))}
                             </div>
+
+                            {/* NUEVO CAMPO DE FEEDBACK / EXPLICACIÓN */}
+                            <div className="pt-2 border-t border-gray-100">
+                              <label className="text-[10px] font-bold text-gray-500 mb-1 flex items-center gap-1">
+                                <HelpCircle className="w-3 h-3 text-purple-600" />
+                                Retroalimentación / Explicación (se muestra si falla la pregunta)
+                              </label>
+                              <textarea
+                                rows={2}
+                                placeholder="Ej: Recuerda que la Participación Juvenil requiere asumir un rol activo en la toma de decisiones..."
+                                value={q.explanation || ""}
+                                onChange={(e) => {
+                                  const evs = [...moduleForm.evaluaciones];
+                                  evs[evalIdx].preguntas[qIdx].explanation = e.target.value;
+                                  setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                }}
+                                className="w-full p-2 bg-purple-50/40 border border-purple-100 rounded-lg text-xs outline-none focus:ring-1 focus:ring-purple-500 resize-none text-gray-700"
+                              />
+                            </div>
                           </div>
                         ))}
 
@@ -824,7 +830,7 @@ export default function AdminCursosScreen() {
                             evs[evalIdx].preguntas.push(createDefaultQuestion());
                             setModuleForm({ ...moduleForm, evaluaciones: evs });
                           }}
-                          className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold text-xs"
+                          className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold text-xs hover:bg-purple-200 transition-colors"
                         >
                           + Agregar Pregunta
                         </button>
@@ -836,14 +842,14 @@ export default function AdminCursosScreen() {
                 <div className="flex gap-3 pt-4 border-t">
                   <button
                     onClick={() => setModuleForm(null)}
-                    className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
+                    className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-200 transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleSaveModule}
                     disabled={uploading}
-                    className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50"
+                    className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-colors"
                   >
                     {uploading ? "Guardando..." : "Guardar Módulo"}
                   </button>

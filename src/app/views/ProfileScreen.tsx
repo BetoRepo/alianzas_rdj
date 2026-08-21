@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { User, Shield, Trophy, Save, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, FormEvent } from "react";
+import { User, Shield, Trophy, Save, CheckCircle2, AlertCircle } from "lucide-react";
 import { updateUserProfile } from "../lib/profile";
 import { getUserDashboardStats } from "../lib/courses";
 
@@ -13,53 +13,71 @@ export default function ProfileScreen({
   const [name, setName] = useState(profile?.name || "");
   const [avatar, setAvatar] = useState(profile?.avatar || "S");
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState(false);
   const [stats, setStats] = useState<any>({ completedCoursesCount: 0 });
+
+  useEffect(() => {
+    if (profile) {
+      setName(profile.name || "");
+      setAvatar(profile.avatar || "S");
+    }
+  }, [profile]);
 
   useEffect(() => {
     async function loadStats() {
       if (profile?.id) {
         const data = await getUserDashboardStats(profile.id);
-        setStats(data);
+        setStats(data || { completedCoursesCount: 0 });
       }
     }
-    loadStats();
+    void loadStats();
   }, [profile]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!profile?.id) return;
 
     setSaving(true);
     setSuccessMsg(false);
+    setErrorMsg("");
 
-    const updated = await updateUserProfile(profile.id, { name, avatar });
+    const updated = await updateUserProfile(profile.id, { 
+      name: name.trim(), 
+      avatar: avatar.trim().toUpperCase() 
+    });
 
     if (updated) {
       onSave(updated);
       setSuccessMsg(true);
-      setTimeout(() => setSuccessMsg(false), 3000);
+      setTimeout(() => setSuccessMsg(false), 3500);
+    } else {
+      setErrorMsg("No se pudieron guardar los cambios. Inténtalo de nuevo.");
     }
 
     setSaving(false);
   }
 
   return (
-    <div className="p-5 max-w-3xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-6 max-w-3xl mx-auto space-y-6 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
       <div>
-        <p className="text-xs font-bold text-purple-500 uppercase tracking-wider">Mi Cuenta</p>
-        <h2 className="text-2xl font-black text-gray-900 tracking-tight">Perfil de Usuario</h2>
+        <p className="text-xs font-bold text-purple-600 uppercase tracking-wider">Mi Cuenta</p>
+        <h1 className="text-2xl font-black text-gray-900" style={{ fontFamily: "Nunito, sans-serif" }}>
+          Perfil de Usuario
+        </h1>
       </div>
 
-      <div className="bg-white rounded-2xl border p-6 shadow-sm space-y-6">
-        <div className="flex items-center gap-4 border-b pb-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-xl font-black text-white shadow-md">
-            {avatar}
+      {/* Formulario e Previsualización */}
+      <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-6">
+        <div className="flex items-center gap-4 border-b border-gray-100 pb-6">
+          {/* Avatar dinámico en vivo */}
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-xl font-black text-white shadow-md transition-all">
+            {avatar || "S"}
           </div>
           <div>
-            <h3 className="text-base font-black text-gray-800">{profile?.name}</h3>
+            <h2 className="text-base font-black text-gray-900">{name || "Miembro Scout"}</h2>
             <p className="text-xs font-bold text-purple-600 mt-0.5">{profile?.role_label || "Miembro Activo"}</p>
-            <p className="text-[10px] text-gray-400 mt-1">{profile?.email}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">{profile?.email}</p>
           </div>
         </div>
 
@@ -72,26 +90,26 @@ export default function ProfileScreen({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full text-xs bg-gray-50 border rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white font-medium text-gray-800"
+              className="w-full text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white font-medium text-gray-800"
               required
             />
           </div>
 
           <div className="space-y-1">
             <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-purple-600" /> Inicial de Avatar
+              <Shield className="w-3.5 h-3.5 text-purple-600" /> Iniciales para Avatar (Máx 2)
             </label>
             <input
               type="text"
               maxLength={2}
               value={avatar}
               onChange={(e) => setAvatar(e.target.value.toUpperCase())}
-              className="w-24 text-xs bg-gray-50 border rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white font-bold text-center text-gray-800"
+              className="w-28 text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white font-black text-center text-purple-700 uppercase"
               required
             />
           </div>
 
-          <div className="pt-2 flex items-center justify-between">
+          <div className="pt-2 flex items-center justify-between gap-2">
             <button
               type="submit"
               disabled={saving}
@@ -105,29 +123,35 @@ export default function ProfileScreen({
                 <CheckCircle2 className="w-4 h-4" /> Perfil actualizado correctamente
               </span>
             )}
+
+            {errorMsg && (
+              <span className="text-xs font-bold text-rose-600 flex items-center gap-1 animate-fade-in">
+                <AlertCircle className="w-4 h-4" /> {errorMsg}
+              </span>
+            )}
           </div>
         </form>
       </div>
 
       {/* Logros e Insignias */}
-      <div className="bg-white rounded-2xl border p-6 shadow-sm space-y-4">
-        <h3 className="text-sm font-black text-gray-800 flex items-center gap-2">
+      <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-4">
+        <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
           <Trophy className="w-4 h-4 text-amber-500" /> Insignias Obtenidas ({stats.completedCoursesCount})
         </h3>
 
         {stats.completedCoursesCount === 0 ? (
-          <div className="bg-gray-50 rounded-xl p-4 text-center text-xs text-gray-400">
-            Aún no has completado ningún curso para obtener insignias.
+          <div className="bg-gray-50/60 rounded-2xl p-5 text-center text-xs text-gray-400">
+            Aún no has completado ningún programa para obtener insignias.
           </div>
         ) : (
-          <div className="flex items-center gap-3 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-white flex items-center justify-center">
+          <div className="flex items-center gap-3.5 bg-amber-50/60 border border-amber-100 rounded-2xl p-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-sm">
               <Trophy className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-800">Cursos Certificados</p>
-              <p className="text-[10px] text-gray-500">
-                Has completado {stats.completedCoursesCount} programa(s) de formación con éxito.
+              <p className="text-xs font-extrabold text-gray-900">Cursos Certificados</p>
+              <p className="text-[11px] text-gray-500">
+                Has completado con éxito {stats.completedCoursesCount} programa(s) de formación.
               </p>
             </div>
           </div>

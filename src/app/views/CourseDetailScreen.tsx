@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -10,7 +10,12 @@ import {
   Lock,
   CheckCircle2,
   Trophy,
-  Sparkles
+  Sparkles,
+  Printer,
+  Download,
+  FileImage,
+  XCircle,
+  BookOpen
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
@@ -54,6 +59,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
   const params = useParams();
   const actualCourseId = params.courseId || params.id;
   const navigate = useNavigate();
+  const topRef = useRef<HTMLDivElement>(null);
 
   const [course, setCourse] = useState<CourseData | null>(null);
   const [modules, setModules] = useState<ModuleData[]>([]);
@@ -72,6 +78,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
   // Estados de evaluación
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [evalResult, setEvalResult] = useState<{ score: number; passed: boolean } | null>(null);
+
+  // Estado para paginación de bloques de contenido
+  const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
 
   useEffect(() => {
     if (actualCourseId) {
@@ -130,14 +139,40 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
       const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
         let parsedContent = mod.content || mod.contenido;
         if (typeof parsedContent === "string") {
-            try {
-                parsedContent = JSON.parse(parsedContent);
-                if (typeof parsedContent === "string") {
-                    parsedContent = JSON.parse(parsedContent);
+          try {
+            parsedContent = JSON.parse(parsedContent);
+            if (typeof parsedContent === "string") parsedContent = JSON.parse(parsedContent);
+          } catch (e) {
+            parsedContent = [{ type: "text", content: parsedContent }];
+          }
+        }
+
+        // --- INICIO LÓGICA DE AUTO-PAGINACIÓN ---
+        let finalContentBlocks: ContentBlock[] = [];
+        const MAX_CHAR_LENGTH = 1200; 
+
+        if (Array.isArray(parsedContent)) {
+          parsedContent.forEach((block: any) => {
+            if (block.type === "text" && block.content && block.content.length > MAX_CHAR_LENGTH) {
+              const paragraphs = block.content.split(/\n/);
+              let currentChunk = "";
+              
+              paragraphs.forEach((p: string) => {
+                if (currentChunk.length + p.length > MAX_CHAR_LENGTH && currentChunk.trim().length > 0) {
+                  finalContentBlocks.push({ type: "text", content: currentChunk.trim() });
+                  currentChunk = p + "\n";
+                } else {
+                  currentChunk += p + "\n";
                 }
-            } catch (e) {
-                parsedContent = [{ type: "text", content: parsedContent }];
+              });
+              
+              if (currentChunk.trim().length > 0) {
+                finalContentBlocks.push({ type: "text", content: currentChunk.trim() });
+              }
+            } else {
+              finalContentBlocks.push(block);
             }
+          });
         }
 
         const modEvals = evalsData
@@ -157,7 +192,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
           id: mod.id,
           titulo: mod.title || mod.titulo || "Módulo sin título",
           duracion: mod.duration || mod.duracion || "45 min",
-          contenido: parsedContent,
+          contenido: finalContentBlocks,
           evaluaciones: modEvals
         };
       });
@@ -189,6 +224,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
       setSelectedEvalId(null);
       setEvalResult(null);
       setUserAnswers({});
+      setCurrentBlockIndex(0);
     } else {
       setShowCertificate(true);
     }
@@ -269,7 +305,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         );
       case "text":
       default:
-        return <div key={index} className="my-3 text-sm leading-relaxed text-gray-700 whitespace-pre-line">{block.content}</div>;
+        return <div key={index} className="my-3 text-base leading-relaxed text-gray-700 whitespace-pre-line fade-in">{block.content}</div>;
     }
   }
 
@@ -301,10 +337,11 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-purple-600 transition-all">
-        <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
-      </button>
+    <div className="p-6 max-w-7xl mx-auto space-y-8" ref={topRef}>
+      <style>{`
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
 
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3">
@@ -343,6 +380,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
                       setSelectedEvalId(null);
                       setEvalResult(null);
                       setUserAnswers({});
+                      setCurrentBlockIndex(0);
                     }}
                     disabled={isLocked}
                     className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
@@ -433,26 +471,73 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
               </div>
 
               {evalResult ? (
-                <div className={`p-6 rounded-2xl text-center space-y-4 ${evalResult.passed ? "bg-emerald-50 border border-emerald-100" : "bg-rose-50 border border-rose-100"}`}>
-                  <Award className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`} />
-                  <h3 className="text-lg font-bold">{evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "Necesitas un nuevo intento."}</h3>
-                  <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
-                  
-                  {evalResult.passed ? (
-                    <button
-                      onClick={() => handleAdvanceToNextModule(activeModule!.id)}
-                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto"
-                    >
-                      Siguiente Módulo <ChevronRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => { setEvalResult(null); setUserAnswers({}); }}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
-                    >
-                      Reintentar Evaluación
-                    </button>
-                  )}
+                <div className="space-y-8 fade-in">
+                  <div className={`p-6 rounded-2xl text-center space-y-4 ${evalResult.passed ? "bg-emerald-50 border border-emerald-100" : "bg-rose-50 border border-rose-100"}`}>
+                    <Award className={`w-12 h-12 mx-auto ${evalResult.passed ? "text-emerald-600" : "text-rose-500"}`} />
+                    <h3 className="text-lg font-bold">{evalResult.passed ? "¡Felicidades! Aprobaste la evaluación." : "No alcanzaste el mínimo aprobatorio."}</h3>
+                    <p className="text-sm font-bold">Puntaje obtenido: {evalResult.score}%</p>
+                    
+                    {evalResult.passed ? (
+                      <button onClick={() => activeModule && handleAdvanceToNextModule(activeModule.id)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 mx-auto">
+                        Continuar <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      /* REDIRECCIÓN AL MÓDULO CUANDO FALLAN */
+                      <button 
+                        onClick={() => { 
+                          setSelectedEvalId(null);
+                          setEvalResult(null);
+                          setUserAnswers({});
+                          setCurrentBlockIndex(0);
+                        }} 
+                        className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-purple-200 transition-all inline-flex items-center gap-2 mx-auto"
+                      >
+                        <BookOpen className="w-4 h-4" /> Repasar Módulo
+                      </button>
+                    )}
+                  </div>
+
+                  {/* SECCIÓN DE FEEDBACK */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-gray-800 border-b pb-2 uppercase tracking-wide">Revisión de tus respuestas</h3>
+                    {activeEval.preguntas.map((q, qIdx) => {
+                      const isCorrect = userAnswers[qIdx] === q.correct;
+                      return (
+                        <div key={qIdx} className={`p-5 rounded-2xl border ${isCorrect ? "bg-emerald-50/30 border-emerald-100" : "bg-rose-50/30 border-rose-100"}`}>
+                          <p className="text-sm font-bold text-gray-800 mb-3">{qIdx + 1}. {q.question}</p>
+                          <div className="space-y-2">
+                            {q.options.map((opt, optIdx) => {
+                              const isSelected = userAnswers[qIdx] === optIdx;
+                              const isActualCorrect = q.correct === optIdx;
+                              
+                              let optionClass = "bg-white border-gray-200 text-gray-500 opacity-60";
+                              
+                              if (isActualCorrect) {
+                                optionClass = "bg-emerald-100 border-emerald-400 text-emerald-900 font-bold shadow-sm";
+                              } else if (isSelected && !isActualCorrect) {
+                                optionClass = "bg-rose-100 border-rose-300 text-rose-900 line-through";
+                              }
+
+                              return (
+                                <div key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border text-xs transition-all ${optionClass}`}>
+                                  <span className="flex-1">{opt}</span>
+                                  {isActualCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                                  {isSelected && !isActualCorrect && <XCircle className="w-4 h-4 text-rose-500" />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          {!isCorrect && q.explanation && (
+                            <div className="mt-4 p-4 bg-white rounded-xl border border-rose-100 text-xs text-gray-700 leading-relaxed shadow-sm">
+                              <span className="font-bold text-rose-700 flex items-center gap-1 mb-1"><AlertCircle className="w-4 h-4" /> Importante saber:</span>
+                              {q.explanation}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -496,24 +581,54 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
                 )}
               </div>
 
-              {/* Botón Dinámico al final del Módulo */}
-              <div className="pt-6 border-t mt-8">
-                {activeModule.evaluaciones && activeModule.evaluaciones.length > 0 ? (
-                  <button
-                    onClick={() => setSelectedEvalId(activeModule.evaluaciones[0].id)}
-                    className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <Award className="w-4 h-4" /> Presentar Evaluación del Módulo
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleAdvanceToNextModule(activeModule.id)}
-                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    Completar y Pasar al Siguiente Módulo <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              {/* CONTROLES DE NAVEGACIÓN Y COMPLETACIÓN */}
+              {Array.isArray(activeModule.contenido) && activeModule.contenido.length > 0 && (
+                <div className="pt-6 border-t mt-8 flex items-center justify-between">
+                  {/* Botón Anterior */}
+                  <div className="w-1/3 text-left">
+                    <button
+                      onClick={() => setCurrentBlockIndex((prev) => Math.max(0, prev - 1))}
+                      disabled={currentBlockIndex === 0}
+                      className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 disabled:opacity-0 disabled:cursor-default transition-all flex items-center gap-1"
+                    >
+                      <ArrowLeft className="w-4 h-4" /> Anterior
+                    </button>
+                  </div>
+
+                  {/* Indicador de Progreso */}
+                  <div className="w-1/3 text-center">
+                    <span className="text-xs font-bold text-gray-400">
+                      Paso {currentBlockIndex + 1} de {activeModule.contenido.length}
+                    </span>
+                  </div>
+
+                  {/* Botón Siguiente o Acciones Finales */}
+                  <div className="w-1/3 flex justify-end">
+                    {currentBlockIndex < activeModule.contenido.length - 1 ? (
+                      <button
+                        onClick={() => setCurrentBlockIndex((prev) => Math.min(activeModule.contenido.length - 1, prev + 1))}
+                        className="px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 shadow-sm transition-all flex items-center gap-1"
+                      >
+                        Siguiente <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      completedModules.includes(activeModule.id) ? (
+                        <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="px-5 py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2">
+                          Avanzar <ChevronRight className="w-4 h-4" />
+                        </button>
+                      ) : activeModule.evaluaciones && activeModule.evaluaciones.length > 0 ? (
+                        <button onClick={() => setSelectedEvalId(activeModule.evaluaciones[0].id)} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap">
+                          <Award className="w-4 h-4" /> Evaluar
+                        </button>
+                      ) : (
+                        <button onClick={() => handleAdvanceToNextModule(activeModule.id)} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap">
+                          Completar <ChevronRight className="w-4 h-4" />
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm text-center py-12">
