@@ -55,6 +55,12 @@ export default function UserDashboard({ userProfile }: { userProfile: any }) {
     <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in" style={{ fontFamily: "Inter, sans-serif" }}>
       {/* Banner de Bienvenida */}
       <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-purple-600 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+        {/* Imagen de fondo */}
+        <img
+          src="/images/scout-banner.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+        />
         <div className="space-y-1.5 z-10">
           <span className="text-[10px] font-black uppercase tracking-widest text-purple-200 bg-purple-950/40 px-3 py-1 rounded-full border border-purple-400/20">
             Siempre Listos

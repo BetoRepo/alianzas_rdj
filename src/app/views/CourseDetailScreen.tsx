@@ -259,14 +259,14 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
     switch (block.type) {
       case "image":
         return (
-          <div key={index} className="my-4 space-y-2">
+          <div key={index} className="my-4 space-y-2 fade-in">
             <img src={block.content} alt={block.caption || "Imagen"} className="w-full max-h-96 object-cover rounded-2xl border" />
             {block.caption && <p className="text-xs text-center text-gray-500 italic">{block.caption}</p>}
           </div>
         );
       case "video":
         return (
-          <div key={index} className="my-4 space-y-2">
+          <div key={index} className="my-4 space-y-2 fade-in">
             <div className="aspect-video w-full rounded-2xl overflow-hidden border bg-black">
               <iframe src={block.content} title="Video" className="w-full h-full" allowFullScreen />
             </div>
@@ -275,7 +275,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         );
       case "pdf":
         return (
-          <div key={index} className="my-6">
+          <div key={index} className="my-6 fade-in">
             <div className="flex items-center justify-between p-4 bg-purple-50 rounded-t-2xl border border-b-0 border-purple-200">
               <div className="flex items-center gap-3">
                 <FileDown className="w-5 h-5 text-purple-600" />
@@ -290,7 +290,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         );
       case "slides":
         return (
-          <div key={index} className="my-6">
+          <div key={index} className="my-6 fade-in">
             <div className="flex items-center justify-between p-4 bg-purple-50 rounded-t-2xl border border-b-0 border-purple-200">
               <div className="flex items-center gap-3">
                 <Presentation className="w-5 h-5 text-purple-600" />
@@ -344,8 +344,16 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
       `}</style>
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3 relative overflow-hidden">
+        {/* Imagen de portada como fondo */}
+        {(course.imagen_url || course.cover_image || course.img) && (
+          <img
+            src={course.imagen_url || course.cover_image || course.img}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+          />
+        )}
+        <div className="relative z-10 flex items-center justify-between">
           <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider">{course.badge}</span>
           {isAllCompleted && (
             <button
@@ -356,8 +364,8 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
             </button>
           )}
         </div>
-        <h1 className="text-3xl font-black">{course.titulo}</h1>
-        {course.descripcion && <p className="text-sm text-purple-100 max-w-3xl">{course.descripcion}</p>}
+        <h1 className="text-3xl font-black relative z-10">{course.titulo}</h1>
+        {course.descripcion && <p className="text-sm text-purple-100 max-w-3xl relative z-10">{course.descripcion}</p>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -567,17 +575,17 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
             </div>
           ) : activeModule ? (
             /* Visor de Módulo */
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <div className="border-b pb-4">
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-h-[600px]">
+              <div className="border-b pb-4 mb-6">
                 <span className="text-xs font-bold text-purple-600 uppercase">Módulo</span>
                 <h2 className="text-xl font-black text-gray-900">{activeModule.titulo}</h2>
               </div>
 
-              <div className="space-y-4">
+              <div className="flex-1 space-y-4">
                 {!Array.isArray(activeModule.contenido) || activeModule.contenido.length === 0 ? (
                   <p className="text-xs text-gray-400 italic py-6 text-center">No hay contenido redactado para este módulo aún.</p>
                 ) : (
-                  activeModule.contenido.map((block: any, idx: number) => renderBlock(block, idx))
+                  renderBlock(activeModule.contenido[currentBlockIndex], currentBlockIndex)
                 )}
               </div>
 

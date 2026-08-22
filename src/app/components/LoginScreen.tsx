@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft, CheckCircle, Compass } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
+import scoutLoginImg from "../../assets/images/scout-login.jpg";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -98,9 +99,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     <div className="min-h-screen flex selection:bg-purple-200" style={{ fontFamily: "Inter, sans-serif" }}>
       {/* ─── PANEL IZQUIERDO: IMAGEN (solo desktop) ─── */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        {/* IMAGEN: Coloca tu foto en public/scout-login.jpg */}
+        {/* IMAGEN: Foto de scouts en naturaleza */}
         <img
-          src="/scout-login.jpg"
+          src={scoutLoginImg}
           alt="Scouts en naturaleza"
           className="absolute inset-0 w-full h-full object-cover"
         />

@@ -82,7 +82,7 @@ export default function CatalogoScreen() {
               ? rawDesc
               : "Explora este módulo para adquirir nuevas habilidades y fortalezas en tu área Scout.";
             const duration = course.duracion || course.duration || "1 hora";
-            const cover = course.imagen_url || course.cover_image;
+            const cover = course.imagen_url || course.cover_image || course.img;
 
             return (
               <div
@@ -91,17 +91,22 @@ export default function CatalogoScreen() {
                 className="bg-white rounded-3xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
               >
                 <div className="space-y-3">
-                  {cover && (
-                    <img
-                      src={cover}
-                      alt={title}
-                      className="w-full h-36 object-cover rounded-2xl"
-                    />
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 uppercase">
-                      {course.badge || "Especialidad"}
-                    </span>
+                  {/* Imagen del curso (siempre visible) */}
+                  <div className="w-full h-36 rounded-2xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-100">
+                    {cover ? (
+                      <img
+                        src={cover}
+                        alt={title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <BookOpen className="w-10 h-10 text-purple-300" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end">
                     <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" /> {duration}
                     </span>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Home, BookOpen, Users, BarChart2, LogOut, User, ChevronLeft, ChevronRight } from "lucide-react";
+import logoImg from "../../assets/images/logo.png";
 
 interface SidebarProps {
   role: string;
@@ -49,11 +50,17 @@ export default function Sidebar({ role, currentScreen, onNavigate, onLogout }: S
         {/* Logotipo superior + toggle */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between overflow-hidden">
           <div className="flex items-center gap-2.5 overflow-hidden">
+            {/* Logo: usa /images/logo.png si existe, sino muestra la "S" */}
             <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-sm flex-shrink-0"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-sm flex-shrink-0 overflow-hidden"
               style={{ background: "linear-gradient(135deg, #FBC02D, #f59e0b)", fontFamily: "Nunito, sans-serif" }}
             >
-              S
+              <img
+                src="/images/logo.png"
+                alt="Logo Alianzas RDJ"
+                className="w-full h-full object-cover"
+              />
+              <span hidden>S</span>
             </div>
             {!collapsed && (
               <span className="font-black text-white tracking-tight text-base whitespace-nowrap" style={{ fontFamily: "Nunito, sans-serif" }}>
