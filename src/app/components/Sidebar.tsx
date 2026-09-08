@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Home, BookOpen, Users, BarChart2, LogOut, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Home, BookOpen, Users, BarChart2, LogOut, User, ChevronLeft, ChevronRight, Award } from "lucide-react";
 import logoImg from "../../assets/images/logo.png";
 
 interface SidebarProps {
@@ -20,12 +20,15 @@ export default function Sidebar({ role, currentScreen, onNavigate, onLogout }: S
 
   // Configuración de botones de navegación
   const userMenuItems = [
-    { id: "dashboard", label: "Mi Progreso", icon: <Home className="w-5 h-5" /> },
+    { id: "home", label: "Inicio", icon: <Home className="w-5 h-5" /> },
+    { id: "dashboard", label: "Mi Progreso", icon: <BarChart2 className="w-5 h-5" /> },
     { id: "catalogo", label: "Cursos", icon: <BookOpen className="w-5 h-5" /> },
+    { id: "mis-cursos", label: "Mis Cursos", icon: <Award className="w-5 h-5" /> },
     { id: "perfil", label: "Perfil", icon: <User className="w-5 h-5" /> },
   ];
 
   const adminMenuItems = [
+    { id: "home", label: "Inicio", icon: <Home className="w-5 h-5" /> },
     { id: "dashboard", label: "Dashboard", icon: <BarChart2 className="w-5 h-5" /> },
     { id: "catalogo", label: "Cursos", icon: <BookOpen className="w-5 h-5" /> },
     { id: "admin-cursos", label: "Gestionar Cursos", icon: <BookOpen className="w-5 h-5" /> },

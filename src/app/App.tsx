@@ -15,6 +15,7 @@ const AdminDashboard = lazy(() => import("./components/AdminDashboard").then(m =
 const UsersScreen = lazy(() => import("./components/UsersScreen").then(m => ({ default: m.UsersScreen })));
 const AdminCursosScreen = lazy(() => import("./components/AdminCursosScreen"));
 const UserDashboard = lazy(() => import("./views/UserDashboard"));
+const HomeScreen = lazy(() => import("./views/HomeScreen"));
 const CatalogoScreen = lazy(() => import("./views/CatalogoScreen"));
 const InsigniasScreen = lazy(() => import("./views/InsigniasScreen"));
 const CursoDetalleScreen = lazy(() => import("./views/CourseDetailScreen"));
@@ -144,7 +145,8 @@ export default function App() {
             >
               <Suspense fallback={<LoadingSpinner fullScreen text="Cargando..." />}>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/" element={<Navigate to="/home" replace />} />
+                  <Route path="/home" element={<HomeScreen userProfile={profile} />} />
                   <Route
                     path="/dashboard"
                     element={profile.role === "admin" ? <AdminDashboard /> : <UserDashboard userProfile={profile} />}
@@ -162,7 +164,7 @@ export default function App() {
                     </>
                   )}
 
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/home" replace />} />
                 </Routes>
               </Suspense>
             </motion.div>
