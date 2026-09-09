@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, type FormEvent } from "react";
 import {
-  PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp, HelpCircle
+  PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp, HelpCircle, ArrowUp, ArrowDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase, DEFAULT_STORAGE_BUCKET } from "../lib/supabase";
@@ -30,6 +30,7 @@ interface ContentBlock {
 interface ModuleForm {
   title: string;
   duration: string;
+  tipo: string;
   blocks: ContentBlock[];
   evaluaciones: EvaluationForm[];
 }
@@ -50,6 +51,7 @@ function createDefaultModule(): ModuleForm {
   return {
     title: "",
     duration: "",
+    tipo: "regular",
     blocks: [{ type: "text", content: "", caption: "" }],
     evaluaciones: [createDefaultEvaluation(0)]
   };
@@ -222,6 +224,7 @@ export default function AdminCursosScreen() {
     setModuleForm({
       title: mod.titulo || mod.title || "",
       duration: mod.duracion || mod.duration || "",
+      tipo: mod.tipo || "regular",
       blocks: parsedBlocks,
       evaluaciones: formEvals
     });
@@ -240,6 +243,7 @@ export default function AdminCursosScreen() {
         curso_id: activeCourse.id,
         title: moduleForm.title,
         duration: moduleForm.duration,
+        tipo: moduleForm.tipo,
         content: contentPayload,
         quiz: "[]"
       };
@@ -257,7 +261,7 @@ export default function AdminCursosScreen() {
           .insert([
             {
               ...modulePayload,
-              orden: modules.length + 1
+              orden: moduleForm.tipo === "intro" ? 0 : modules.length + 1
             }
           ])
           .select()
@@ -332,6 +336,43 @@ export default function AdminCursosScreen() {
     const { error } = await supabase.from("modulos").delete().eq("id", moduloId);
     if (error) toast.error("Error al eliminar módulo: " + error.message);
     else if (activeCourse) void fetchModules(activeCourse.id);
+  }
+
+  async function handleReorderModule(moduloId: number, direction: "up" | "down") {
+    const currentIndex = modules.findIndex((m) => m.id === moduloId);
+    if (currentIndex === -1) return;
+
+    const swapIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (swapIndex < 0 || swapIndex >= modules.length) return;
+
+    const currentMod = modules[currentIndex];
+    const swapMod = modules[swapIndex];
+
+    // Actualizar localmente primero para respuesta inmediata
+    const updated = [...modules];
+    updated[currentIndex] = swapMod;
+    updated[swapIndex] = currentMod;
+    setModules(updated);
+
+    // Persistir en la base de datos
+    try {
+      const { error: err1 } = await supabase
+        .from("modulos")
+        .update({ orden: swapMod.orden })
+        .eq("id", currentMod.id);
+
+      const { error: err2 } = await supabase
+        .from("modulos")
+        .update({ orden: currentMod.orden })
+        .eq("id", swapMod.id);
+
+      if (err1 || err2) throw new Error("Error al reordenar módulos");
+      toast.success("Orden actualizado");
+    } catch (err: any) {
+      toast.error("Error al reordenar: " + err.message);
+      // Revertir en caso de error
+      void fetchModules(activeCourse!.id);
+    }
   }
 
   async function handleFileUpload(file: File, blockIndex: number) {
@@ -516,11 +557,37 @@ export default function AdminCursosScreen() {
                   {modules.length === 0 ? (
                     <p className="text-xs text-gray-400 py-4 text-center">Este curso no tiene módulos registrados.</p>
                   ) : (
-                    modules.map((mod) => (
+                    modules.map((mod, idx) => (
                       <div key={mod.id} className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div>
-                          <h4 className="font-bold text-gray-800 text-sm">{mod.titulo || mod.title}</h4>
-                          <span className="text-xs text-gray-400">{mod.duracion || mod.duration || "Sin duración"}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button
+                              onClick={() => handleReorderModule(mod.id, "up")}
+                              disabled={idx === 0}
+                              aria-label="Subir módulo"
+                              className="p-0.5 text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleReorderModule(mod.id, "down")}
+                              disabled={idx === modules.length - 1}
+                              aria-label="Bajar módulo"
+                              className="p-0.5 text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-gray-800 text-sm">{mod.titulo || mod.title}</h4>
+                              {mod.tipo === "intro" && (
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">Intro</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400">{mod.duracion || mod.duration || "Sin duración"}</span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -577,6 +644,42 @@ export default function AdminCursosScreen() {
                   </div>
                 </div>
 
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                  <label className="text-xs font-bold text-gray-700">Tipo de módulo:</label>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setModuleForm({ ...moduleForm, tipo: "regular" })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        moduleForm.tipo === "regular"
+                          ? "bg-purple-600 text-white shadow-sm"
+                          : "bg-white text-gray-600 border border-gray-200 hover:bg-purple-50"
+                      }`}
+                    >
+                      Regular
+                    </button>
+                    <button
+                      onClick={() => {
+                        const hasIntro = modules.some((m) => m.tipo === "intro" && m.id !== editingModuleId);
+                        if (hasIntro) {
+                          toast.warning("Ya existe un módulo de introducción en este curso. Elimínalo primero si deseas crear otro.");
+                          return;
+                        }
+                        setModuleForm({ ...moduleForm, tipo: "intro" });
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        moduleForm.tipo === "intro"
+                          ? "bg-amber-500 text-white shadow-sm"
+                          : "bg-white text-gray-600 border border-gray-200 hover:bg-amber-50"
+                      }`}
+                    >
+                      ▶ Introducción
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-gray-400 ml-1">
+                    {moduleForm.tipo === "intro" ? "Se muestra antes del primer módulo" : "Módulo normal del curso"}
+                  </span>
+                </div>
+
                 {/* BLOQUES MULTIMEDIA */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
@@ -630,39 +733,64 @@ export default function AdminCursosScreen() {
                         />
                       ) : (
                         <div className="space-y-2">
+                          {block.content ? (
+                            <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
+                              <span className="text-[10px] text-emerald-700 font-bold truncate flex-1">{block.content}</span>
+                              <button
+                                onClick={() => {
+                                  const b = [...moduleForm.blocks];
+                                  b[idx].content = "";
+                                  setModuleForm({ ...moduleForm, blocks: b });
+                                }}
+                                className="text-[10px] text-rose-500 font-bold hover:underline whitespace-nowrap"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <label className="cursor-pointer px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
+                                <FileUp className="w-4 h-4" /> Subir {block.type === "video" ? "Video" : block.type === "image" ? "Imagen" : block.type === "pdf" ? "PDF" : "Presentación"}
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept={
+                                    block.type === "video" ? "video/*" :
+                                    block.type === "image" ? "image/*" :
+                                    block.type === "pdf" ? ".pdf" :
+                                    ".pptx,.ppt,.key,.odp"
+                                  }
+                                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], idx)}
+                                />
+                              </label>
+                              <span className="text-[10px] text-gray-400">o pega una URL</span>
+                            </div>
+                          )}
+                          {block.content ? null : (
+                            <input
+                              type="text"
+                              placeholder={`URL externa (${block.type})`}
+                              value={block.content}
+                              onChange={(e) => {
+                                const b = [...moduleForm.blocks];
+                                b[idx].content = e.target.value;
+                                setModuleForm({ ...moduleForm, blocks: b });
+                              }}
+                              className="w-full p-2 text-xs border rounded-xl"
+                            />
+                          )}
                           <input
                             type="text"
-                            placeholder={`URL del recurso (${block.type})`}
-                            value={block.content}
+                            placeholder="Leyenda / Título corto (opcional)"
+                            aria-label="Leyenda del bloque"
+                            value={block.caption || ""}
                             onChange={(e) => {
                               const b = [...moduleForm.blocks];
-                              b[idx].content = e.target.value;
+                              b[idx].caption = e.target.value;
                               setModuleForm({ ...moduleForm, blocks: b });
                             }}
                             className="w-full p-2 text-xs border rounded-xl"
                           />
-                          <div className="flex items-center gap-2">
-                            <label className="cursor-pointer px-3 py-1.5 bg-white border rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1">
-                              <FileUp className="w-3.5 h-3.5" /> Subir Archivo
-                              <input
-                                type="file"
-                                className="hidden"
-                                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], idx)}
-                              />
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Leyenda / Título corto (opcional)"
-                              aria-label="Leyenda del bloque"
-                              value={block.caption || ""}
-                              onChange={(e) => {
-                                const b = [...moduleForm.blocks];
-                                b[idx].caption = e.target.value;
-                                setModuleForm({ ...moduleForm, blocks: b });
-                              }}
-                              className="flex-1 p-2 text-xs border rounded-xl"
-                            />
-                          </div>
                         </div>
                       )}
                     </div>

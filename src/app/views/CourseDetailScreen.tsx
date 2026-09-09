@@ -10,10 +10,7 @@ import {
   Lock,
   CheckCircle2,
   Trophy,
-  Sparkles,
   Printer,
-  Download,
-  FileImage,
   XCircle,
   BookOpen
 } from "lucide-react";
@@ -46,6 +43,7 @@ interface ModuleData {
   duracion: string;
   contenido: any;
   evaluaciones: EvaluationData[];
+  tipo: string;
 }
 
 interface CourseData {
@@ -74,6 +72,10 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
   
   // Estado para ver el certificado final
   const [showCertificate, setShowCertificate] = useState(false);
+
+  // Estado para módulo de introducción
+  const [showIntro, setShowIntro] = useState(false);
+  const [introCompleted, setIntroCompleted] = useState(false);
 
   // Estados de evaluación
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
@@ -193,13 +195,18 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
           titulo: mod.title || mod.titulo || "Módulo sin título",
           duracion: mod.duration || mod.duracion || "45 min",
           contenido: finalContentBlocks,
-          evaluaciones: modEvals
+          evaluaciones: modEvals,
+          tipo: mod.tipo || "regular"
         };
       });
 
       setModules(fullModules);
 
-      if (fullModules.length > 0) {
+      // Si hay módulo de introducción, mostrarlo primero
+      const introMod = fullModules.find((m) => m.tipo === "intro");
+      if (introMod) {
+        setShowIntro(true);
+      } else if (fullModules.length > 0) {
         setSelectedModuleId(fullModules[0].id);
       }
     } catch (err: any) {
@@ -283,9 +290,14 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
               </div>
               <a href={block.content} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-purple-600">Abrir en pestaña nueva</a>
             </div>
-            <div className="w-full h-[500px] border border-purple-200 rounded-b-2xl overflow-hidden bg-gray-50">
+            <div className="w-full h-[700px] border border-purple-200 overflow-hidden bg-gray-50">
               <iframe src={block.content} className="w-full h-full" title="Visor PDF" />
             </div>
+            {block.caption && (
+              <div className="p-4 bg-gray-50 border border-t-0 border-purple-200 rounded-b-2xl">
+                <p className="text-xs text-gray-600 leading-relaxed">{block.caption}</p>
+              </div>
+            )}
           </div>
         );
       case "slides":
@@ -298,9 +310,14 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
               </div>
               <a href={block.content} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-purple-600">Descargar original</a>
             </div>
-            <div className="w-full h-[500px] border border-purple-200 rounded-b-2xl overflow-hidden bg-gray-50">
+            <div className="w-full h-[700px] border border-purple-200 overflow-hidden bg-gray-50">
               <iframe src={`https://docs.google.com/gview?url=${encodeURIComponent(block.content)}&embedded=true`} className="w-full h-full" title="Visor Presentación" />
             </div>
+            {block.caption && (
+              <div className="p-4 bg-gray-50 border border-t-0 border-purple-200 rounded-b-2xl">
+                <p className="text-xs text-gray-600 leading-relaxed">{block.caption}</p>
+              </div>
+            )}
           </div>
         );
       case "text":
@@ -311,7 +328,8 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
 
   const activeModule = modules.find((m) => m.id === selectedModuleId);
   const activeEval = activeModule?.evaluaciones.find((e) => e.id === selectedEvalId);
-  const isAllCompleted = modules.length > 0 && completedModules.length === modules.length;
+  const regularModules = modules.filter((m) => m.tipo !== "intro");
+  const isAllCompleted = regularModules.length > 0 && regularModules.every((m) => completedModules.includes(m.id));
 
   if (loading) {
     return (
@@ -373,9 +391,48 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         <div className="space-y-3">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contenido del Curso</h3>
           <div className="space-y-2">
-            {modules.map((mod, idx) => {
+            {/* Módulo de Introducción */}
+            {modules.some((m) => m.tipo === "intro") && (
+              <div className="space-y-1">
+                <button
+                  onClick={() => {
+                    setShowCertificate(false);
+                    setShowIntro(true);
+                    setSelectedEvalId(null);
+                    setEvalResult(null);
+                    setUserAnswers({});
+                    setCurrentBlockIndex(0);
+                  }}
+                  className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                    showIntro
+                      ? "bg-purple-600 text-white border-purple-600 shadow-md"
+                      : introCompleted
+                      ? "bg-white text-gray-800 border-gray-100 hover:border-purple-200"
+                      : "bg-white text-gray-800 border-gray-100 hover:border-purple-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                      introCompleted ? "bg-white/20 text-white" : showIntro ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700"
+                    }`}>
+                      {introCompleted ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : "▶"}
+                    </span>
+                    <div>
+                      <p className={`text-xs font-bold line-clamp-1 ${introCompleted && !showIntro ? "text-emerald-700" : ""}`}>Introducción</p>
+                      <p className={`text-[10px] ${showIntro ? "text-purple-200" : "text-gray-400"}`}>Video presentación</p>
+                    </div>
+                  </div>
+                  {introCompleted ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <ChevronRight className={`w-4 h-4 ${showIntro ? "text-white" : "text-gray-400"}`} />}
+                </button>
+              </div>
+            )}
+
+            {modules.filter((m) => m.tipo !== "intro").map((mod, idx, regularMods) => {
               const isSelected = selectedModuleId === mod.id && selectedEvalId === null && !showCertificate;
-              const isLocked = idx > 0 && !completedModules.includes(modules[idx - 1].id);
+              const hasIntro = modules.some((m) => m.tipo === "intro");
+              const isLocked = hasIntro && !introCompleted
+                ? true
+                : idx > 0 && !completedModules.includes(regularMods[idx - 1].id);
               const isCompleted = completedModules.includes(mod.id);
 
               return (
@@ -442,32 +499,69 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         {/* Visor Principal */}
         <div className="lg:col-span-2">
           {showCertificate ? (
-            /* Pantalla del Certificado */
-            <div className="bg-white p-8 rounded-3xl border-4 border-amber-300 shadow-2xl text-center space-y-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <Trophy className="w-64 h-64 text-amber-500" />
-              </div>
-              <Sparkles className="w-12 h-12 text-amber-500 mx-auto animate-pulse" />
-              <span className="px-4 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-black uppercase tracking-widest">
-                Certificado de Aprobación
-              </span>
-              <h2 className="text-2xl font-black text-gray-900">¡Felicidades por completar el curso!</h2>
-              <p className="text-xs text-gray-500 max-w-md mx-auto">
-                Has completado con éxito todos los módulos y evaluaciones del programa <strong className="text-gray-800">{course.titulo}</strong>.
-              </p>
-
-              <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 space-y-2">
-                <p className="text-xs text-amber-800 font-bold uppercase">Otorgado a</p>
-                <p className="text-lg font-black text-gray-900">{userProfile?.name || "Participante Destacado"}</p>
-                <p className="text-[10px] text-gray-400">Emisión verificada por la plataforma de capacitación</p>
-              </div>
-
-              <button
-                onClick={() => window.print()}
-                className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-amber-950 font-black text-xs rounded-xl shadow-lg transition-all"
+            /* Certificado con imagen de fondo */
+            <div className="space-y-4">
+              <div
+                id="certificado-area"
+                className="relative w-full rounded-3xl overflow-hidden shadow-2xl"
+                style={{
+                  backgroundImage: `url("https://jjhcwaopnwfevbuirxku.supabase.co/storage/v1/object/public/bucket/Certificado%20de%20Reconocimiento%20Elegante%20Verde%20y%20Beige.png")`,
+                  backgroundSize: "contain",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                  aspectRatio: "1.414"
+                }}
               >
-                Imprimir / Guardar Certificado
-              </button>
+                {/* Nombre del participante — sobre la línea horizontal */}
+                <div className="absolute flex flex-col items-center" style={{ top: "43%", left: "50%", transform: "translateX(-50%)", width: "60%" }}>
+                  <p className="text-xl md:text-2xl font-black text-gray-900 text-center" style={{ fontFamily: "Georgia, serif" }}>
+                    {userProfile?.name || "Participante Destacado"}
+                  </p>
+                  <div className="w-full h-px bg-gray-400 mt-1" />
+                </div>
+
+                {/* Título del curso — debajo de "Ha aprobado el curso de" */}
+                <div className="absolute flex items-center justify-center" style={{ top: "60%", left: "50%", transform: "translateX(-50%)", width: "80%" }}>
+                  <p className="text-2xl md:text-3xl font-black text-purple-800 text-center uppercase tracking-wide" style={{ fontFamily: "Arial, sans-serif" }}>
+                    {course.titulo}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => {
+                    const printWindow = window.open("", "_blank");
+                    if (!printWindow) return;
+                    printWindow.document.write(`
+                      <html><head><title>Certificado</title>
+                      <style>
+                        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
+                        .cert { position: relative; width: 900px; height: 636px; background-image: url("https://jjhcwaopnwfevbuirxku.supabase.co/storage/v1/object/public/bucket/Certificado%20de%20Reconocimiento%20Elegante%20Verde%20y%20Beige.png"); background-size: contain; background-repeat: no-repeat; background-position: center; }
+                        .name { position: absolute; top: 43%; left: 50%; transform: translateX(-50%); width: 60%; text-align: center; font-family: Georgia, serif; font-size: 24px; font-weight: 900; color: #111; }
+                        .name-line { width: 100%; height: 1px; background: #999; margin-top: 4px; }
+                        .course { position: absolute; top: 60%; left: 50%; transform: translateX(-50%); width: 80%; text-align: center; font-family: Arial, sans-serif; font-size: 28px; font-weight: 900; color: #6b21a8; text-transform: uppercase; letter-spacing: 1px; }
+                      </style></head><body>
+                        <div class="cert">
+                          <div class="name">${userProfile?.name || "Participante Destacado"}<div class="name-line"></div></div>
+                          <div class="course">${course.titulo}</div>
+                        </div>
+                      </body></html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.onload = () => { printWindow.print(); };
+                  }}
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir / Guardar Certificado
+                </button>
+                <button
+                  onClick={() => setShowCertificate(false)}
+                  className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
+                >
+                  Volver al Curso
+                </button>
+              </div>
             </div>
           ) : selectedEvalId && activeEval ? (
             /* Visor de Evaluación */
@@ -573,6 +667,43 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
                 </div>
               )}
             </div>
+          ) : showIntro && modules.some((m) => m.tipo === "intro") ? (
+            /* Visor de Introducción */
+            (() => {
+              const introModule = modules.find((m) => m.tipo === "intro")!;
+              return (
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                  <div className="border-b pb-4">
+                    <span className="text-xs font-bold text-purple-600 uppercase">Introducción</span>
+                    <h2 className="text-xl font-black text-gray-900">{introModule.titulo || "Bienvenido al Curso"}</h2>
+                  </div>
+
+                  {Array.isArray(introModule.contenido) && introModule.contenido.length > 0 ? (
+                    introModule.contenido.map((block: any, idx: number) => (
+                      <div key={idx}>{renderBlock(block, idx)}</div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 italic py-6 text-center">No hay contenido de introducción configurado.</p>
+                  )}
+
+                  <div className="flex justify-end pt-4 border-t">
+                    <button
+                      onClick={() => {
+                        if (!introCompleted) setIntroCompleted(true);
+                        setShowIntro(false);
+                        if (regularModules.length > 0) {
+                          setSelectedModuleId(regularModules[0].id);
+                          setCurrentBlockIndex(0);
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
+                    >
+                      Comenzar Curso <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()
           ) : activeModule ? (
             /* Visor de Módulo */
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-h-[600px]">
