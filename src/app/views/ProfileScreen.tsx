@@ -1,6 +1,8 @@
-import { useState, useEffect, FormEvent } from "react";
-import { User, Shield, Trophy, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect, type FormEvent } from "react";
+import { User, Shield, Trophy, Save, CheckCircle2, AlertCircle, Lock } from "lucide-react";
+import { toast } from "sonner";
 import { updateUserProfile } from "../lib/profile";
+import { supabase } from "../lib/supabase";
 import { getUserDashboardStats } from "../lib/courses";
 
 export default function ProfileScreen({
@@ -16,6 +18,21 @@ export default function ProfileScreen({
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState(false);
   const [stats, setStats] = useState<any>({ completedCoursesCount: 0 });
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  async function handleChangePassword(e: FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 6) return toast.warning("La contraseña debe tener al menos 6 caracteres.");
+    setChangingPassword(true);
+    const { error } = await supabase.rpc("cambiar_password", { p_actual: currentPassword, p_nueva: newPassword });
+    setChangingPassword(false);
+    if (error) return toast.error(error.message);
+    toast.success("Contraseña actualizada.");
+    setCurrentPassword("");
+    setNewPassword("");
+  }
 
   useEffect(() => {
     if (profile) {
@@ -132,6 +149,41 @@ export default function ProfileScreen({
           </div>
         </form>
       </div>
+
+      {/* Cambiar contraseña */}
+      <form onSubmit={handleChangePassword} className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-4">
+        <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-purple-600" /> Cambiar Contraseña
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input
+            type="password"
+            placeholder="Contraseña actual"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="w-full text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Nueva contraseña (mín. 6)"
+            autoComplete="new-password"
+            minLength={6}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white"
+            required
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={changingPassword}
+          className="px-5 py-2.5 bg-gray-800 hover:bg-gray-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50"
+        >
+          <Lock className="w-4 h-4" /> {changingPassword ? "Guardando..." : "Actualizar Contraseña"}
+        </button>
+      </form>
 
       {/* Logros e Insignias */}
       <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-4">

@@ -1,7 +1,8 @@
-import { useState, useEffect, FormEvent } from "react";
-import { Search, PlusCircle, Trash2, X, Shield, UserCheck } from "lucide-react";
+import { useState, useEffect, type FormEvent } from "react";
+import { Search, PlusCircle, Trash2, X, Shield, UserCheck, KeyRound } from "lucide-react";
 import { toast } from "sonner";
-import { supabase, createSignupClient } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
+import { adminCrearUsuario, adminCambiarPassword } from "../lib/auth";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { LoadingSpinner } from "./ui/LoadingSpinner";
 
@@ -45,36 +46,28 @@ export function UsersScreen() {
 
     setCreating(true);
     try {
-      // 1. Registro con un cliente aparte para no cerrar la sesión del admin.
-      //    El trigger handle_new_user crea el perfil con rol "user".
-      const { data: authData, error: authError } = await createSignupClient().auth.signUp({
-        email,
-        password,
-        options: { data: { name: name.trim() } }
-      });
-
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // 2. Ajustar rol y etiqueta (solo un admin puede hacerlo)
-        const { error: profileError } = await supabase
-          .from("perfiles")
-          .update({
-            role: isAdmin ? "admin" : "user",
-            role_label: isAdmin ? "Administrador / Dirigente" : "Scouter / Educador"
-          })
-          .eq("id", authData.user.id);
-
-        if (profileError) throw profileError;
-
-        setShowModal(false);
-        setEmail(""); setPassword(""); setName(""); setIsAdmin(false);
-        await fetchUsers();
-      }
+      // La función admin_crear_usuario cifra la contraseña y crea el usuario en public.usuarios
+      await adminCrearUsuario(name, email, password, isAdmin);
+      toast.success("Usuario registrado.");
+      setShowModal(false);
+      setEmail(""); setPassword(""); setName(""); setIsAdmin(false);
+      await fetchUsers();
     } catch (err: any) {
       alert("Error al registrar usuario: " + (err.message || err));
     } finally {
       setCreating(false);
+    }
+  }
+
+  // No hay correos de recuperación: el admin pone una contraseña nueva
+  async function handleResetPassword(u: any) {
+    const nueva = window.prompt(`Nueva contraseña para ${u.name} (mínimo 6 caracteres):`);
+    if (!nueva) return;
+    try {
+      await adminCambiarPassword(u.id, nueva);
+      toast.success("Contraseña actualizada. Compártela con el usuario.");
+    } catch (err: any) {
+      toast.error(err.message);
     }
   }
 
@@ -129,6 +122,7 @@ export function UsersScreen() {
                 </div>
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${u.status === "Activo" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{u.status}</span>
                 <div className="flex gap-1">
+                  <button onClick={() => handleResetPassword(u)} aria-label={`Restablecer contraseña de ${u.name}`} title="Restablecer contraseña" className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-[#622599] hover:bg-purple-50 transition-all"><KeyRound className="w-3.5 h-3.5" /></button>
                   <button onClick={() => setDeleteUserConfirm({ open: true, userId: u.id })} aria-label={`Eliminar usuario ${u.name}`} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               </div>

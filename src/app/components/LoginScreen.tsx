@@ -1,103 +1,49 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft, CheckCircle, Compass } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "../lib/supabase";
+import { iniciarSesion, registrar } from "../lib/auth";
 import scoutLoginImg from "../../assets/images/scout-login.jpg";
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
 interface LoginScreenProps {
-  onLogin: () => void;
-  // App la abre en "reset" cuando el usuario llega desde el enlace de recuperación
-  initialMode?: Mode;
+  onLogin: (usuario: any) => void;
 }
 
-export default function LoginScreen({ onLogin, initialMode = "login" }: LoginScreenProps) {
-  const [mode, setMode] = useState<Mode>(initialMode);
+export default function LoginScreen({ onLogin }: LoginScreenProps) {
+  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setMode("reset");
-    });
-    if (window.location.hash.includes("type=recovery")) setMode("reset");
-    return () => { authListener.subscription.unsubscribe(); };
-  }, []);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
+    // Sin correos de recuperación: el administrador restablece la contraseña desde Usuarios
     if (mode === "forgot") {
-      if (!email) return toast.warning("Por favor introduce tu correo electrónico.");
-      setLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-      setLoading(false);
-      if (error) toast.error("Error al enviar el correo: " + error.message);
-      else { toast.success("¡Enlace enviado! Revisa tu bandeja de entrada o spam."); setMode("login"); }
-      return;
-    }
-
-    if (mode === "reset") {
-      if (!password) return toast.warning("Por favor ingresa una nueva contraseña.");
-      if (password !== confirmPassword) return toast.warning("Las contraseñas no coinciden.");
-      setLoading(true);
-      const { error } = await supabase.auth.updateUser({ password });
-      setLoading(false);
-      if (error) toast.error("Error al actualizar la contraseña: " + error.message);
-      else {
-        toast.success("¡Contraseña actualizada!");
-        setPassword(""); setConfirmPassword("");
-        window.history.replaceState(null, "", window.location.pathname);
-        // El enlace de recuperación ya inició sesión: entrar directamente
-        if (initialMode === "reset") onLogin();
-        else setMode("login");
-      }
+      toast.info("Pide a un administrador que restablezca tu contraseña desde el panel de Usuarios.");
+      setMode("login");
       return;
     }
 
     if (!email || !password) return toast.warning("Por favor completa los campos.");
-    setLoading(true);
+    if (mode === "register" && !name.trim()) return toast.warning("Por favor introduce tu nombre.");
+    if (mode === "register" && password.length < 6) return toast.warning("La contraseña debe tener al menos 6 caracteres.");
 
-    if (mode === "register") {
-      if (!name) { toast.warning("Por favor introduce tu nombre."); setLoading(false); return; }
-      if (password.length < 6) { toast.warning("La contraseña debe tener al menos 6 caracteres."); setLoading(false); return; }
-      // El perfil lo crea el trigger handle_new_user en la base de datos
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email, password, options: { data: { name: name.trim() } }
-      });
-      if (authError) {
-        toast.error(
-          /already registered/i.test(authError.message)
-            ? "Este correo ya tiene una cuenta. Inicia sesión."
-            : "Error al registrar: " + authError.message
-        );
-      } else if (authData.session) {
-        // Sin confirmación de correo: el usuario entra directamente
-        toast.success("¡Cuenta Scout creada! Bienvenido.");
-        onLogin();
-      } else {
-        // "Confirm email" sigue activo en Supabase: intentar entrar igualmente
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) toast.error("Cuenta creada, pero Supabase pide confirmar el correo. Desactiva \"Confirm email\" en Supabase.");
-        else onLogin();
-      }
-    } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        toast.error(
-          /not confirmed/i.test(error.message)
-            ? "Tu correo aún no está confirmado."
-            : "Correo o contraseña incorrectos. Intenta de nuevo o recupera tu contraseña."
-        );
-      } else if (data?.user) {
-        onLogin();
-      }
+    setLoading(true);
+    try {
+      const usuario = mode === "register"
+        ? await registrar(name, email, password)
+        : await iniciarSesion(email, password);
+      if (mode === "register") toast.success("¡Cuenta Scout creada! Bienvenido.");
+      onLogin(usuario);
+    } catch (err: any) {
+      toast.error(err.message || "No se pudo conectar. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -181,7 +127,7 @@ export default function LoginScreen({ onLogin, initialMode = "login" }: LoginScr
               </h1>
               <p className="text-xs text-gray-400 mt-1">
                 {mode === "register" ? "Unete a la hermandad scout y empieza tu progresion"
-                  : mode === "forgot" ? "Ingresa tu correo y te enviaremos un enlace"
+                  : mode === "forgot" ? "Un administrador puede restablecer tu contrasena"
                   : mode === "reset" ? "Confirma tu nueva contrasena para acceder"
                   : "Ingresa tus credenciales para acceder a tus insignias"}
               </p>
@@ -252,7 +198,7 @@ export default function LoginScreen({ onLogin, initialMode = "login" }: LoginScr
                 {loading ? (
                   <span className="animate-pulse">PROCESANDO...</span>
                 ) : mode === "reset" ? <><CheckCircle className="w-4 h-4" /> ACTUALIZAR</>
-                : mode === "forgot" ? <><KeyRound className="w-4 h-4" /> ENVIAR ENLACE</>
+                : mode === "forgot" ? <><KeyRound className="w-4 h-4" /> SOLICITAR AYUDA</>
                 : mode === "register" ? <><UserPlus className="w-4 h-4" /> REGISTRARME</>
                 : <><LogIn className="w-4 h-4" /> INICIAR SESION</>}
               </button>

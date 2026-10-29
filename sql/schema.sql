@@ -2,6 +2,7 @@
 -- Esquema completo de la plataforma (Supabase / Postgres)
 -- Proyecto: https://glojhiyloyoeqyasugmu.supabase.co
 -- Ejecutar en: Supabase → SQL Editor → New query → Run
+-- Después ejecutar sql/usuarios_propios.sql (usuarios en tabla propia, sin Supabase Auth).
 --
 -- ⚠️ La sección 0 BORRA las tablas existentes y sus datos.
 --    Coméntala si solo quieres crear lo que falta.

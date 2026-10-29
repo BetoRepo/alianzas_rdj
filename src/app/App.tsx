@@ -4,7 +4,7 @@ import { Bell, Search } from "lucide-react";
 import { Toaster } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 
-import { supabase } from "./lib/supabase";
+import { usuarioActual, cerrarSesion } from "./lib/auth";
 import Sidebar from "./components/Sidebar";
 import LoginScreen from "./components/LoginScreen";
 import { CommandPalette } from "./components/CommandPalette";
@@ -23,35 +23,19 @@ const ModuleViewerScreen = lazy(() => import("./views/ModuleViewerScreen"));
 const ProfileScreen = lazy(() => import("./views/ProfileScreen"));
 
 export default function App() {
-  const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  // El enlace de recuperación de contraseña inicia sesión; hay que mostrar el formulario de nueva contraseña
-  const [recovering, setRecovering] = useState(() => window.location.hash.includes("type=recovery"));
 
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Recupera la sesión guardada (token en localStorage) al abrir la app
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setLoading(false);
+    usuarioActual().then((usuario) => {
+      setProfile(usuario);
+      setLoading(false);
     });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") setRecovering(true);
-      setSession(session);
-      // Al refrescar el token no hace falta volver a pedir el perfil
-      if (session && event !== "TOKEN_REFRESHED") fetchProfile(session.user.id);
-      else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   // Keyboard shortcut for command palette
@@ -66,25 +50,6 @@ export default function App() {
     return () => document.removeEventListener("keydown", down);
   }, []);
 
-  async function fetchProfile(userId: string) {
-    const { data, error } = await supabase.from("perfiles").select("*").eq("id", userId).single();
-    if (!error && data) {
-      setProfile(data);
-    } else {
-      setProfile({ id: userId, name: "Scout", email: "", role: "user", role_label: "Miembro Activo", avatar: "S" });
-    }
-    setLoading(false);
-  }
-
-  if (recovering) {
-    return (
-      <>
-        <Toaster position="top-right" richColors />
-        <LoginScreen initialMode="reset" onLogin={() => { setRecovering(false); navigate("/home", { replace: true }); }} />
-      </>
-    );
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-white" style={{ background: "linear-gradient(135deg, #622599, #4a1c75)" }}>
@@ -93,11 +58,11 @@ export default function App() {
     );
   }
 
-  if (!session || !profile) {
+  if (!profile) {
     return (
       <>
         <Toaster position="top-right" richColors />
-        <LoginScreen onLogin={() => {}} />
+        <LoginScreen onLogin={(usuario) => { setProfile(usuario); navigate("/home", { replace: true }); }} />
       </>
     );
   }
@@ -117,7 +82,7 @@ export default function App() {
         role={profile.role}
         currentScreen={currentPath}
         onNavigate={(screen: string) => navigate(`/${screen}`)}
-        onLogout={() => supabase.auth.signOut()}
+        onLogout={() => { void cerrarSesion(); setProfile(null); }}
       />
 
       <main className="flex-1 flex flex-col min-w-0 w-full lg:pl-1 lg:pr-4 lg:py-4">
