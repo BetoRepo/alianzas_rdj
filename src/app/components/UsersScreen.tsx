@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { Search, PlusCircle, Trash2, X, Shield, UserCheck } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "../lib/supabase";
+import { supabase, createSignupClient } from "../lib/supabase";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { LoadingSpinner } from "./ui/LoadingSpinner";
 
@@ -45,34 +45,25 @@ export function UsersScreen() {
 
     setCreating(true);
     try {
-      // 1. Registro en Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // 1. Registro con un cliente aparte para no cerrar la sesión del admin.
+      //    El trigger handle_new_user crea el perfil con rol "user".
+      const { data: authData, error: authError } = await createSignupClient().auth.signUp({
         email,
         password,
-        options: { data: { name } }
+        options: { data: { name: name.trim() } }
       });
 
       if (authError) throw authError;
 
-      // 2. Inserción de Perfil con Iniciales
       if (authData.user) {
-        const initials = name
-          .trim()
-          .split(" ")
-          .map((n) => n[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 2) || "S";
-
-        const { error: profileError } = await supabase.from("perfiles").insert([{
-          id: authData.user.id,
-          name,
-          email,
-          role: isAdmin ? "admin" : "user",
-          role_label: isAdmin ? "Administrador / Dirigente" : "Scouter / Educador",
-          avatar: initials,
-          status: "Activo"
-        }]);
+        // 2. Ajustar rol y etiqueta (solo un admin puede hacerlo)
+        const { error: profileError } = await supabase
+          .from("perfiles")
+          .update({
+            role: isAdmin ? "admin" : "user",
+            role_label: isAdmin ? "Administrador / Dirigente" : "Scouter / Educador"
+          })
+          .eq("id", authData.user.id);
 
         if (profileError) throw profileError;
 

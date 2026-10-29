@@ -5,7 +5,7 @@ Supabase Storage setup (bucket `bucket`)
 
 2) Hacer el bucket privado (recomendado)
 - Abre la consola de Supabase: https://app.supabase.com
-- Selecciona tu proyecto (URL: https://jjhcwaopnwfevbuirxku.supabase.co)
+- Selecciona tu proyecto (URL: https://glojhiyloyoeqyasugmu.supabase.co)
 - Ve a Storage → Buckets → selecciona `bucket` → Settings → desactiva `Public` (o ejecuta el SQL provisto).
 
 3) Aplicar políticas SQL (si quieres control fino)

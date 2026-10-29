@@ -76,42 +76,35 @@ export async function getUserProgress(userId: string) {
 }
 
 export async function getUserDashboardStats(userId: string) {
-  const { data: courses } = await supabase.from("cursos").select("id");
-  const totalCourses = courses?.length || 0;
+  // Tres consultas en paralelo en lugar de una tras otra
+  const [{ count: totalCourses }, { data: progress }, { data: modules }] = await Promise.all([
+    supabase.from("cursos").select("id", { count: "exact", head: true }),
+    supabase.from("progreso_modulo").select("modulo_id").eq("user_id", userId).eq("completado", true),
+    supabase.from("modulos").select("id, curso_id")
+  ]);
 
-  const { data: progress } = await supabase
-    .from("progreso_modulo")
-    .select("modulo_id, completado")
-    .eq("user_id", userId)
-    .eq("completado", true);
-
-  const completedModuleIds = progress?.map((p) => p.modulo_id) || [];
-
-  const { data: modules } = await supabase.from("modulos").select("id, curso_id");
+  const completedModuleIds = new Set((progress || []).map((p) => p.modulo_id));
 
   if (!modules || modules.length === 0) {
-    return { completedCoursesCount: 0, totalCourses, completedModulesCount: 0, totalModules: 0 };
+    return { completedCoursesCount: 0, totalCourses: totalCourses || 0, completedModulesCount: 0, totalModules: 0 };
   }
 
-  const modulesByCourse: Record<string, string[]> = {};
+  const modulesByCourse = new Map<number, number[]>();
   modules.forEach((m) => {
-    if (!modulesByCourse[m.curso_id]) modulesByCourse[m.curso_id] = [];
-    modulesByCourse[m.curso_id].push(m.id);
+    const list = modulesByCourse.get(m.curso_id) || [];
+    list.push(m.id);
+    modulesByCourse.set(m.curso_id, list);
   });
 
   let completedCoursesCount = 0;
-  Object.keys(modulesByCourse).forEach((courseId) => {
-    const courseModules = modulesByCourse[courseId];
-    const isFinished = courseModules.every((modId) => completedModuleIds.includes(modId));
-    if (isFinished && courseModules.length > 0) {
-      completedCoursesCount++;
-    }
+  modulesByCourse.forEach((courseModules) => {
+    if (courseModules.every((modId) => completedModuleIds.has(modId))) completedCoursesCount++;
   });
 
   return {
     completedCoursesCount,
-    totalCourses,
-    completedModulesCount: completedModuleIds.length,
+    totalCourses: totalCourses || 0,
+    completedModulesCount: modules.filter((m) => completedModuleIds.has(m.id)).length,
     totalModules: modules.length,
   };
 }

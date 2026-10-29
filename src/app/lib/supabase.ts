@@ -4,6 +4,14 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Cliente sin sesión persistida: permite que un admin registre usuarios
+// sin que su propia sesión sea reemplazada por la del usuario nuevo.
+export function createSignupClient() {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "signup-tmp" }
+  });
+}
 export const DEFAULT_STORAGE_BUCKET = "bucket"; // change to your bucket name
 
 /**

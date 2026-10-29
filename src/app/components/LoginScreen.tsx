@@ -4,12 +4,16 @@ import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
 import scoutLoginImg from "../../assets/images/scout-login.jpg";
 
+type Mode = "login" | "register" | "forgot" | "reset";
+
 interface LoginScreenProps {
   onLogin: () => void;
+  // App la abre en "reset" cuando el usuario llega desde el enlace de recuperación
+  initialMode?: Mode;
 }
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
-  const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("login");
+export default function LoginScreen({ onLogin, initialMode = "login" }: LoginScreenProps) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -45,10 +49,12 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       setLoading(false);
       if (error) toast.error("Error al actualizar la contraseña: " + error.message);
       else {
-        toast.success("¡Contraseña actualizada! Ahora puedes iniciar sesión.");
+        toast.success("¡Contraseña actualizada!");
         setPassword(""); setConfirmPassword("");
         window.history.replaceState(null, "", window.location.pathname);
-        setMode("login");
+        // El enlace de recuperación ya inició sesión: entrar directamente
+        if (initialMode === "reset") onLogin();
+        else setMode("login");
       }
       return;
     }
@@ -58,36 +64,35 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
     if (mode === "register") {
       if (!name) { toast.warning("Por favor introduce tu nombre."); setLoading(false); return; }
+      if (password.length < 6) { toast.warning("La contraseña debe tener al menos 6 caracteres."); setLoading(false); return; }
+      // El perfil lo crea el trigger handle_new_user en la base de datos
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email, password, options: { data: { name } }
+        email, password, options: { data: { name: name.trim() } }
       });
       if (authError) {
-        toast.error("Error al registrar: " + authError.message);
-      } else if (authData?.user) {
-        const initials = name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-        const { error: profileError } = await supabase.from("perfiles").insert([{
-          id: authData.user.id, name, email, role: "user", role_label: "Scout de Tropa", avatar: initials || "ST"
-        }]);
-        if (profileError) toast.error("Perfil con error: " + profileError.message);
-        else { toast.success("¡Cuenta Scout creada! Ya puedes iniciar sesión."); setMode("login"); }
+        toast.error(
+          /already registered/i.test(authError.message)
+            ? "Este correo ya tiene una cuenta. Inicia sesión."
+            : "Error al registrar: " + authError.message
+        );
+      } else if (authData.session) {
+        // Sin confirmación de correo: el usuario entra directamente
+        toast.success("¡Cuenta Scout creada! Bienvenido.");
+        onLogin();
+      } else {
+        // "Confirm email" sigue activo en Supabase: intentar entrar igualmente
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) toast.error("Cuenta creada, pero Supabase pide confirmar el correo. Desactiva \"Confirm email\" en Supabase.");
+        else onLogin();
       }
     } else {
-      // Verificar si el correo existe en perfiles antes de intentar login
-      const { data: existingProfile } = await supabase
-        .from("perfiles")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (!existingProfile) {
-        toast.error("Este correo no esta registrado. Crea una cuenta para comenzar.");
-        setLoading(false);
-        return;
-      }
-
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        toast.error("Contrasena incorrecta. Intenta de nuevo o recupera tu contrasena.");
+        toast.error(
+          /not confirmed/i.test(error.message)
+            ? "Tu correo aún no está confirmado."
+            : "Correo o contraseña incorrectos. Intenta de nuevo o recupera tu contraseña."
+        );
       } else if (data?.user) {
         onLogin();
       }

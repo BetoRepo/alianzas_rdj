@@ -27,6 +27,8 @@ export default function App() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  // El enlace de recuperación de contraseña inicia sesión; hay que mostrar el formulario de nueva contraseña
+  const [recovering, setRecovering] = useState(() => window.location.hash.includes("type=recovery"));
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,9 +40,11 @@ export default function App() {
       else setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
       setSession(session);
-      if (session) fetchProfile(session.user.id);
+      // Al refrescar el token no hace falta volver a pedir el perfil
+      if (session && event !== "TOKEN_REFRESHED") fetchProfile(session.user.id);
       else {
         setProfile(null);
         setLoading(false);
@@ -70,6 +74,15 @@ export default function App() {
       setProfile({ id: userId, name: "Scout", email: "", role: "user", role_label: "Miembro Activo", avatar: "S" });
     }
     setLoading(false);
+  }
+
+  if (recovering) {
+    return (
+      <>
+        <Toaster position="top-right" richColors />
+        <LoginScreen initialMode="reset" onLogin={() => { setRecovering(false); navigate("/home", { replace: true }); }} />
+      </>
+    );
   }
 
   if (loading) {

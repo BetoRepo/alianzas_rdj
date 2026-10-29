@@ -1,29 +1,36 @@
 import { useState, useEffect } from "react";
-import { Users, CheckCircle, UserPlus, TrendingUp, BarChart2 } from "lucide-react";
+import { Users, CheckCircle, UserPlus, BarChart2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 export function AdminDashboard() {
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [totalCourses, setTotalCourses] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<{ users: number; courses: number; newUsers: number; completed: number } | null>(null);
 
   useEffect(() => {
     async function getMetrics() {
-      // Cuenta en tiempo real la cantidad exacta de filas en tus tablas
-      const { count: usersCount } = await supabase.from("perfiles").select("*", { count: 'exact', head: true });
-      const { count: coursesCount } = await supabase.from("cursos").select("*", { count: 'exact', head: true });
-      setTotalUsers(usersCount || 0);
-      setTotalCourses(coursesCount || 0);
-      setLoading(false);
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      // Conteos exactos sin descargar filas, en paralelo
+      const [users, courses, newUsers, completed] = await Promise.all([
+        supabase.from("perfiles").select("id", { count: "exact", head: true }),
+        supabase.from("cursos").select("id", { count: "exact", head: true }),
+        supabase.from("perfiles").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
+        supabase.from("progreso_modulo").select("id", { count: "exact", head: true }).eq("completado", true)
+      ]);
+      setMetrics({
+        users: users.count || 0,
+        courses: courses.count || 0,
+        newUsers: newUsers.count || 0,
+        completed: completed.count || 0
+      });
     }
-    getMetrics();
+    void getMetrics();
   }, []);
 
+  const show = (n: number | undefined) => (metrics ? String(n) : "...");
   const stats = [
-    { label: "Usuarios Activos", value: loading ? "..." : totalUsers.toString(), trend: "Base de Datos", icon: <Users className="w-5 h-5" />, color: "#622599", bg: "#f3f0ff" },
-    { label: "Cursos Publicados", value: loading ? "..." : totalCourses.toString(), trend: "Global", icon: <BarChart2 className="w-5 h-5" />, color: "#16a34a", bg: "#f0fdf4" },
-    { label: "Nuevas Inscripciones", value: "0", trend: "7 días", icon: <UserPlus className="w-5 h-5" />, color: "#0ea5e9", bg: "#f0f9ff" },
-    { label: "Tasa de Completado", value: "100%", trend: "Estable", icon: <TrendingUp className="w-5 h-5" />, color: "#f59e0b", bg: "#fffbeb" },
+    { label: "Usuarios Registrados", value: show(metrics?.users), trend: "Total", icon: <Users className="w-5 h-5" />, color: "#622599", bg: "#f3f0ff" },
+    { label: "Cursos Publicados", value: show(metrics?.courses), trend: "Total", icon: <BarChart2 className="w-5 h-5" />, color: "#16a34a", bg: "#f0fdf4" },
+    { label: "Nuevos Usuarios", value: show(metrics?.newUsers), trend: "7 días", icon: <UserPlus className="w-5 h-5" />, color: "#0ea5e9", bg: "#f0f9ff" },
+    { label: "Módulos Completados", value: show(metrics?.completed), trend: "Total", icon: <CheckCircle className="w-5 h-5" />, color: "#f59e0b", bg: "#fffbeb" },
   ];
 
   return (

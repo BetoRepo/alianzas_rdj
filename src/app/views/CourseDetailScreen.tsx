@@ -98,11 +98,13 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
     setError(null);
 
     try {
-      const { data: courseData, error: courseErr } = await supabase
-        .from("cursos")
-        .select("*")
-        .eq("id", id)
-        .single();
+      // Curso + módulos + evaluaciones en una sola consulta, y el progreso del usuario en paralelo
+      const [{ data: courseData, error: courseErr }, { data: progressData }] = await Promise.all([
+        supabase.from("cursos").select("*, modulos(*, evaluaciones(*))").eq("id", id).single(),
+        userProfile?.id
+          ? supabase.from("progreso_modulo").select("modulo_id").eq("user_id", userProfile.id).eq("completado", true)
+          : Promise.resolve({ data: [] as { modulo_id: number }[] })
+      ]);
 
       if (courseErr) throw new Error(`Curso no encontrado: ${courseErr.message}`);
 
@@ -113,32 +115,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         badge: courseData.badge || "Capacitación"
       });
 
-      const { data: modulesData, error: modulesErr } = await supabase
-        .from("modulos")
-        .select("*")
-        .eq("curso_id", id)
-        .order("orden", { ascending: true });
+      const modulesData = [...(courseData.modulos || [])].sort((a: any, b: any) => a.orden - b.orden);
 
-      if (modulesErr) throw new Error(`Error en módulos: ${modulesErr.message}`);
-
-      const modIds = (modulesData || []).map((m) => m.id);
-      let evalsData: any[] = [];
-
-      if (modIds.length > 0) {
-        try {
-          const { data: evals } = await supabase
-            .from("evaluaciones")
-            .select("*")
-            .in("modulo_id", modIds)
-            .order("orden", { ascending: true });
-          
-          if (evals) evalsData = evals;
-        } catch (e) {
-          console.warn("Advertencia: No se pudieron sincronizar las evaluaciones:", e);
-        }
-      }
-
-      const fullModules: ModuleData[] = (modulesData || []).map((mod) => {
+      const fullModules: ModuleData[] = modulesData.map((mod: any) => {
         let parsedContent = mod.content || mod.contenido;
         if (typeof parsedContent === "string") {
           try {
@@ -177,9 +156,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
           });
         }
 
-        const modEvals = evalsData
-          .filter((e) => e.modulo_id === mod.id)
-          .map((e) => ({
+        const modEvals = [...(mod.evaluaciones || [])]
+          .sort((a: any, b: any) => a.orden - b.orden)
+          .map((e: any) => ({
             id: e.id,
             titulo: e.titulo || "Evaluación",
             min_score: e.min_score || 70,
@@ -188,7 +167,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
               : typeof e.preguntas === "string"
               ? JSON.parse(e.preguntas || "[]")
               : []
-          }));
+          }))
+          // Una evaluación sin preguntas no se puede aprobar y bloquearía el curso
+          .filter((e: EvaluationData) => e.preguntas.length > 0);
 
         return {
           id: mod.id,
@@ -202,12 +183,22 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
 
       setModules(fullModules);
 
-      // Si hay módulo de introducción, mostrarlo primero
+      // Progreso guardado, solo de los módulos de ESTE curso
+      const courseModuleIds = new Set(fullModules.map((m) => m.id));
+      const completed = (progressData || []).map((p) => p.modulo_id).filter((mid) => courseModuleIds.has(mid));
+      setCompletedModules(completed);
+
+      const regular = fullModules.filter((m) => m.tipo !== "intro");
       const introMod = fullModules.find((m) => m.tipo === "intro");
-      if (introMod) {
+      if (completed.length > 0) setIntroCompleted(true);
+
+      if (regular.length > 0 && regular.every((m) => completed.includes(m.id))) {
+        setShowCertificate(true);
+      } else if (introMod && completed.length === 0) {
         setShowIntro(true);
-      } else if (fullModules.length > 0) {
-        setSelectedModuleId(fullModules[0].id);
+      } else if (regular.length > 0) {
+        const firstUncompleted = regular.find((m) => !completed.includes(m.id));
+        setSelectedModuleId((firstUncompleted || regular[0]).id);
       }
     } catch (err: any) {
       console.error("Error al cargar el curso:", err);
@@ -217,11 +208,23 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
     }
   }
 
+  // Guarda el módulo como completado en la base de datos
+  async function saveModuleProgress(moduleId: number) {
+    if (completedModules.includes(moduleId)) return;
+    setCompletedModules((prev) => [...prev, moduleId]);
+    if (!userProfile?.id) return;
+    const { error } = await supabase
+      .from("progreso_modulo")
+      .upsert(
+        { user_id: userProfile.id, modulo_id: moduleId, completado: true, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,modulo_id" }
+      );
+    if (error) console.error("Error al guardar progreso:", error.message);
+  }
+
   // Avanzar al siguiente módulo o mostrar certificado si es el último
   function handleAdvanceToNextModule(currentModId: number) {
-    if (!completedModules.includes(currentModId)) {
-      setCompletedModules((prev) => [...prev, currentModId]);
-    }
+    void saveModuleProgress(currentModId);
 
     const currentIndex = modules.findIndex((m) => m.id === currentModId);
     const nextModule = modules[currentIndex + 1];
@@ -242,7 +245,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
   }
 
   function handleSubmitQuiz() {
-    if (!activeEval || !activeModule) return;
+    if (!activeEval || !activeModule || activeEval.preguntas.length === 0) return;
 
     let correctCount = 0;
     activeEval.preguntas.forEach((q, idx) => {
@@ -256,9 +259,13 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
 
     setEvalResult({ score, passed });
 
-    if (passed && !completedModules.includes(activeModule.id)) {
-      setCompletedModules((prev) => [...prev, activeModule.id]);
+    if (userProfile?.id) {
+      void supabase
+        .from("progreso_evaluacion")
+        .insert({ user_id: userProfile.id, evaluacion_id: activeEval.id, score, aprobado: passed })
+        .then(({ error }) => error && console.error("Error al guardar evaluación:", error.message));
     }
+    if (passed) void saveModuleProgress(activeModule.id);
   }
 
   function renderBlock(block: ContentBlock, index: number) {
