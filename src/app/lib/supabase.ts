@@ -53,3 +53,11 @@ export async function getFileUrl(content: string, expires = 3600) {
 	if (error || !data) return "";
 	return data.signedUrl;
 }
+// Sube un archivo al bucket (solo admin, ver políticas de storage) y devuelve su URL pública
+export async function subirArchivo(file: File, carpeta: string) {
+	const ext = file.name.split(".").pop();
+	const path = `${carpeta}/${Date.now()}_${Math.random().toString(36).substring(2)}.${ext}`;
+	const { error } = await supabase.storage.from(DEFAULT_STORAGE_BUCKET).upload(path, file);
+	if (error) throw error;
+	return supabase.storage.from(DEFAULT_STORAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+}

@@ -1,7 +1,8 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { User, Shield, Trophy, Save, CheckCircle2, AlertCircle, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserProfile } from "../lib/profile";
+import { updateUserProfile, validarDatosScout, ramaDeUnidad, calcularEdad } from "../lib/profile";
+import { DatosScoutFields, datosScoutDe } from "../components/DatosScoutFields";
 import { supabase } from "../lib/supabase";
 import { getUserDashboardStats } from "../lib/courses";
 
@@ -14,6 +15,7 @@ export default function ProfileScreen({
 }) {
   const [name, setName] = useState(profile?.name || "");
   const [avatar, setAvatar] = useState(profile?.avatar || "S");
+  const [datos, setDatos] = useState(() => datosScoutDe(profile));
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState(false);
@@ -38,6 +40,7 @@ export default function ProfileScreen({
     if (profile) {
       setName(profile.name || "");
       setAvatar(profile.avatar || "S");
+      setDatos(datosScoutDe(profile));
     }
   }, [profile]);
 
@@ -54,6 +57,8 @@ export default function ProfileScreen({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!profile?.id) return;
+    const datosError = validarDatosScout(datos);
+    if (datosError) return toast.warning(datosError);
 
     setSaving(true);
     setSuccessMsg(false);
@@ -61,7 +66,12 @@ export default function ProfileScreen({
 
     const updated = await updateUserProfile(profile.id, { 
       name: name.trim(), 
-      avatar: avatar.trim().toUpperCase() 
+      avatar: avatar.trim().toUpperCase(),
+      fecha_nacimiento: datos.fecha_nacimiento,
+      grupo: datos.grupo.trim(),
+      region: datos.region.trim(),
+      distrito: datos.distrito.trim(),
+      unidad: datos.unidad
     });
 
     if (updated) {
@@ -99,6 +109,21 @@ export default function ProfileScreen({
             <h2 className="text-base font-black text-gray-900">{name || "Miembro Scout"}</h2>
             <p className="text-xs font-bold text-purple-600 mt-0.5">{profile?.role_label || "Miembro Activo"}</p>
             <p className="text-[11px] text-gray-400 mt-0.5">{profile?.email}</p>
+            {ramaDeUnidad(profile?.unidad) && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-lg text-[11px] font-bold">
+                  {ramaDeUnidad(profile.unidad)} · {profile.unidad}
+                </span>
+                {calcularEdad(profile.fecha_nacimiento) !== null && (
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-bold">
+                    {calcularEdad(profile.fecha_nacimiento)} años
+                  </span>
+                )}
+                {profile.grupo && (
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-bold">{profile.grupo}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -128,6 +153,11 @@ export default function ProfileScreen({
               className="w-28 text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-purple-500 focus:bg-white font-black text-center text-purple-700 uppercase"
               required
             />
+          </div>
+
+          <div className="pt-4 border-t border-gray-100 space-y-3">
+            <p className="text-xs font-black text-gray-900">Datos Scout</p>
+            <DatosScoutFields value={datos} onChange={setDatos} />
           </div>
 
           <div className="pt-2 flex items-center justify-between gap-2">

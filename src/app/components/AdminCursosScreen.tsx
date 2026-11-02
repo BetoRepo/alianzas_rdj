@@ -1,11 +1,13 @@
 ﻿import { useState, useEffect, type FormEvent } from "react";
 import {
-  PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp, HelpCircle, ArrowUp, ArrowDown
+  PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp, HelpCircle, ArrowUp, ArrowDown,
+  Check, ChevronLeft, ChevronRight, AlertTriangle, Image as ImageIcon
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase, DEFAULT_STORAGE_BUCKET } from "../lib/supabase";
+import { supabase, subirArchivo } from "../lib/supabase";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { LoadingSpinner } from "./ui/LoadingSpinner";
+import { ImageUpload } from "./ui/ImageUpload";
 
 interface QuizItem {
   question: string;
@@ -31,9 +33,25 @@ interface ModuleForm {
   title: string;
   duration: string;
   tipo: string;
+  imagen_url: string;
   blocks: ContentBlock[];
   evaluaciones: EvaluationForm[];
 }
+
+const BLOCK_LABELS: Record<ContentBlock["type"], string> = {
+  text: "Texto",
+  image: "Imagen",
+  video: "Video",
+  slides: "Presentación",
+  pdf: "PDF"
+};
+
+const WIZARD_STEPS = [
+  { title: "Datos", hint: "Título y portada" },
+  { title: "Contenido", hint: "Textos y archivos" },
+  { title: "Evaluación", hint: "Preguntas" },
+  { title: "Revisar", hint: "Confirmar y guardar" }
+];
 
 function createDefaultQuestion(): QuizItem {
   return { question: "", options: ["", "", "", ""], correct: 0, explanation: "" };
@@ -52,6 +70,7 @@ function createDefaultModule(): ModuleForm {
     title: "",
     duration: "",
     tipo: "regular",
+    imagen_url: "",
     blocks: [{ type: "text", content: "", caption: "" }],
     evaluaciones: [createDefaultEvaluation(0)]
   };
@@ -94,6 +113,7 @@ export default function AdminCursosScreen() {
   const [editingModuleId, setEditingModuleId] = useState<number | null>(null);
   const [moduleForm, setModuleForm] = useState<ModuleForm | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
 
   // Estados para ConfirmDialog
   const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<{ open: boolean; courseId: string | null }>({ open: false, courseId: null });
@@ -171,8 +191,17 @@ export default function AdminCursosScreen() {
     else setModules(data || []);
   }
 
+  function goToStep(step: number) {
+    if (step > 0 && !moduleForm?.title.trim()) {
+      setWizardStep(0);
+      return toast.warning("Escribe el título del módulo para continuar.");
+    }
+    setWizardStep(step);
+  }
+
   async function handleOpenEditModule(mod: any) {
     setEditingModuleId(mod.id);
+    setWizardStep(0);
 
     const rawContent = mod.contenido || mod.content;
     let parsedBlocks: ContentBlock[] = [];
@@ -225,6 +254,7 @@ export default function AdminCursosScreen() {
       title: mod.titulo || mod.title || "",
       duration: mod.duracion || mod.duration || "",
       tipo: mod.tipo || "regular",
+      imagen_url: mod.imagen_url || "",
       blocks: parsedBlocks,
       evaluaciones: formEvals
     });
@@ -244,6 +274,7 @@ export default function AdminCursosScreen() {
         title: moduleForm.title,
         duration: moduleForm.duration,
         tipo: moduleForm.tipo,
+        imagen_url: moduleForm.imagen_url || null,
         content: contentPayload,
         quiz: "[]"
       };
@@ -279,8 +310,9 @@ export default function AdminCursosScreen() {
       const currentEvalIds = (currentEvals || []).map((e: any) => e.id);
       const updatedEvalIds: number[] = [];
 
-      for (let i = 0; i < moduleForm.evaluaciones.length; i++) {
-        const ev = moduleForm.evaluaciones[i];
+      const evaluaciones = moduleForm.tipo === "intro" ? [] : moduleForm.evaluaciones;
+      for (let i = 0; i < evaluaciones.length; i++) {
+        const ev = evaluaciones[i];
         const validQuestions = buildQuizPayload(ev.preguntas);
 
         if (ev.id) {
@@ -378,25 +410,13 @@ export default function AdminCursosScreen() {
   async function handleFileUpload(file: File, blockIndex: number) {
     setUploading(true);
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `modulos/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from(DEFAULT_STORAGE_BUCKET)
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from(DEFAULT_STORAGE_BUCKET)
-        .getPublicUrl(filePath);
-
-      if (moduleForm) {
-        const updatedBlocks = [...moduleForm.blocks];
-        updatedBlocks[blockIndex].content = urlData.publicUrl;
-        setModuleForm({ ...moduleForm, blocks: updatedBlocks });
-      }
+      const url = await subirArchivo(file, "modulos");
+      setModuleForm((form) => {
+        if (!form) return form;
+        const updatedBlocks = [...form.blocks];
+        updatedBlocks[blockIndex] = { ...updatedBlocks[blockIndex], content: url };
+        return { ...form, blocks: updatedBlocks };
+      });
     } catch (err: any) {
       toast.error("Error subiendo archivo: " + err.message);
     } finally {
@@ -419,61 +439,60 @@ export default function AdminCursosScreen() {
         </div>
 
         <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Título del Curso</label>
-            <input
-              type="text"
-              placeholder="Ej: Liderazgo Scout Afectivo"
-              value={newCourse.title}
-              onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+          <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Título del Curso</label>
+              <input
+                type="text"
+                placeholder="Ej: Liderazgo Scout Afectivo"
+                value={newCourse.title}
+                onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Nivel / Insignia</label>
+              <select
+                value={newCourse.badge}
+                onChange={(e) => setNewCourse({ ...newCourse, badge: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+              >
+                <option value="Básico">Básico</option>
+                <option value="Intermedio">Intermedio</option>
+                <option value="Avanzado">Avanzado</option>
+                <option value="Especial">Especial</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-gray-700 mb-1">Resumen del Curso</label>
+              <textarea
+                rows={3}
+                placeholder="Breve descripción del curso..."
+                value={newCourse.summary}
+                onChange={(e) => setNewCourse({ ...newCourse, summary: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md"
+              >
+                <PlusCircle className="w-4 h-4" /> Crear Nuevo Curso
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Nivel / Insignia</label>
-            <select
-              value={newCourse.badge}
-              onChange={(e) => setNewCourse({ ...newCourse, badge: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-            >
-              <option value="Básico">Básico</option>
-              <option value="Intermedio">Intermedio</option>
-              <option value="Avanzado">Avanzado</option>
-              <option value="Especial">Especial</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">URL Imagen Portada</label>
-            <input
-              type="text"
-              placeholder="https://..."
-              value={newCourse.cover_image}
-              onChange={(e) => setNewCourse({ ...newCourse, cover_image: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-xs font-bold text-gray-700 mb-1">Resumen del Curso</label>
-            <input
-              type="text"
-              placeholder="Breve descripción del curso..."
-              value={newCourse.summary}
-              onChange={(e) => setNewCourse({ ...newCourse, summary: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
-
-          <div className="flex items-end">
-            <button
-              type="submit"
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md"
-            >
-              <PlusCircle className="w-4 h-4" /> Crear Nuevo Curso
-            </button>
-          </div>
+          <ImageUpload
+            label="Imagen de Portada"
+            carpeta="portadas/cursos"
+            value={newCourse.cover_image}
+            onChange={(url) => setNewCourse({ ...newCourse, cover_image: url })}
+            heightClass="h-40"
+          />
         </form>
       </div>
 
@@ -545,6 +564,7 @@ export default function AdminCursosScreen() {
                   <button
                     onClick={() => {
                       setEditingModuleId(null);
+                      setWizardStep(0);
                       setModuleForm(createDefaultModule());
                     }}
                     className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm"
@@ -579,6 +599,7 @@ export default function AdminCursosScreen() {
                             </button>
                           </div>
                           <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                          {mod.imagen_url && <img src={mod.imagen_url} alt="" className="w-12 h-8 object-cover rounded-lg" />}
                           <div>
                             <div className="flex items-center gap-2">
                               <h4 className="font-bold text-gray-800 text-sm">{mod.titulo || mod.title}</h4>
@@ -610,7 +631,7 @@ export default function AdminCursosScreen() {
                 </div>
               </div>
             ) : (
-              /* EDITOR DE MÓDULO CON EVALUACIONES */
+              /* EDITOR DE MÓDULO: ASISTENTE POR PASOS */
               <div className="space-y-6">
                 <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl">
                   <h3 className="font-black text-purple-900 text-base">
@@ -621,366 +642,502 @@ export default function AdminCursosScreen() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Título del Módulo</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Módulo 1 - Historia Scout"
-                      value={moduleForm.title}
-                      onChange={(e) => setModuleForm({ ...moduleForm, title: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Duración (ej: 45 min)</label>
-                    <input
-                      type="text"
-                      placeholder="45 min"
-                      value={moduleForm.duration}
-                      onChange={(e) => setModuleForm({ ...moduleForm, duration: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border text-sm"
-                    />
-                  </div>
-                </div>
+                {/* INDICADOR DE PASOS */}
+                <ol className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {WIZARD_STEPS.map((step, i) => (
+                    <li key={step.title}>
+                      <button
+                        type="button"
+                        onClick={() => goToStep(i)}
+                        aria-current={wizardStep === i ? "step" : undefined}
+                        className={`w-full p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                          wizardStep === i
+                            ? "bg-purple-600 border-purple-600 text-white shadow-md"
+                            : i < wizardStep
+                            ? "bg-purple-50 border-purple-100 text-purple-800"
+                            : "bg-white border-gray-200 text-gray-500 hover:border-purple-200"
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                          wizardStep === i ? "bg-white/20" : i < wizardStep ? "bg-purple-600 text-white" : "bg-gray-100"
+                        }`}>
+                          {i < wizardStep ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-xs font-black">{step.title}</span>
+                          <span className={`block text-[10px] truncate ${wizardStep === i ? "text-purple-100" : "text-gray-400"}`}>{step.hint}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
 
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                  <label className="text-xs font-bold text-gray-700">Tipo de módulo:</label>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setModuleForm({ ...moduleForm, tipo: "regular" })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        moduleForm.tipo === "regular"
-                          ? "bg-purple-600 text-white shadow-sm"
-                          : "bg-white text-gray-600 border border-gray-200 hover:bg-purple-50"
-                      }`}
-                    >
-                      Regular
-                    </button>
-                    <button
-                      onClick={() => {
-                        const hasIntro = modules.some((m) => m.tipo === "intro" && m.id !== editingModuleId);
-                        if (hasIntro) {
-                          toast.warning("Ya existe un módulo de introducción en este curso. Elimínalo primero si deseas crear otro.");
-                          return;
-                        }
-                        setModuleForm({ ...moduleForm, tipo: "intro" });
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        moduleForm.tipo === "intro"
-                          ? "bg-amber-500 text-white shadow-sm"
-                          : "bg-white text-gray-600 border border-gray-200 hover:bg-amber-50"
-                      }`}
-                    >
-                      ▶ Introducción
-                    </button>
-                  </div>
-                  <span className="text-[10px] text-gray-400 ml-1">
-                    {moduleForm.tipo === "intro" ? "Se muestra antes del primer módulo" : "Módulo normal del curso"}
-                  </span>
-                </div>
-
-                {/* BLOQUES MULTIMEDIA */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-sm text-gray-800">Bloques de Contenido</h4>
-                    <div className="flex gap-1">
-                      {(["text", "image", "video", "slides", "pdf"] as const).map((type) => (
-                        <button
-                          key={type}
-                          onClick={() =>
-                            setModuleForm({
-                              ...moduleForm,
-                              blocks: [...moduleForm.blocks, { type, content: "", caption: "" }]
-                            })
-                          }
-                          className="px-2.5 py-1 bg-gray-100 hover:bg-purple-100 hover:text-purple-700 text-gray-600 rounded-lg text-xs font-bold capitalize"
-                        >
-                          + {type}
-                        </button>
-                      ))}
+                {wizardStep === 0 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Título del Módulo</label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Módulo 1 - Historia Scout"
+                          value={moduleForm.title}
+                          onChange={(e) => setModuleForm({ ...moduleForm, title: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Duración (ej: 45 min)</label>
+                        <input
+                          type="text"
+                          placeholder="45 min"
+                          value={moduleForm.duration}
+                          onChange={(e) => setModuleForm({ ...moduleForm, duration: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border text-sm"
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  {moduleForm.blocks.map((block, idx) => (
-                    <div key={idx} className="p-3 bg-gray-50 rounded-2xl border space-y-2 relative">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-purple-700 uppercase">Bloque #{idx + 1} ({block.type})</span>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                      <label className="text-xs font-bold text-gray-700">Tipo de módulo:</label>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setModuleForm({ ...moduleForm, tipo: "regular" })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            moduleForm.tipo === "regular"
+                              ? "bg-purple-600 text-white shadow-sm"
+                              : "bg-white text-gray-600 border border-gray-200 hover:bg-purple-50"
+                          }`}
+                        >
+                          Regular
+                        </button>
                         <button
                           onClick={() => {
-                            const newBlocks = moduleForm.blocks.filter((_, i) => i !== idx);
-                            setModuleForm({ ...moduleForm, blocks: newBlocks });
+                            const hasIntro = modules.some((m) => m.tipo === "intro" && m.id !== editingModuleId);
+                            if (hasIntro) {
+                              toast.warning("Ya existe un módulo de introducción en este curso. Elimínalo primero si deseas crear otro.");
+                              return;
+                            }
+                            setModuleForm({ ...moduleForm, tipo: "intro" });
                           }}
-                          aria-label={`Eliminar bloque ${idx + 1}`}
-                          className="text-rose-500 hover:text-rose-700"
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            moduleForm.tipo === "intro"
+                              ? "bg-amber-500 text-white shadow-sm"
+                              : "bg-white text-gray-600 border border-gray-200 hover:bg-amber-50"
+                          }`}
                         >
-                          <X className="w-4 h-4" />
+                          ▶ Introducción
                         </button>
                       </div>
+                      <span className="text-[10px] text-gray-400 ml-1">
+                        {moduleForm.tipo === "intro" ? "Se muestra antes del primer módulo" : "Módulo normal del curso"}
+                      </span>
+                    </div>
 
-                      {block.type === "text" ? (
-                        <textarea
-                          rows={3}
-                          placeholder="Escribe el contenido de este bloque..."
-                          aria-label="Contenido del bloque de texto"
-                          value={block.content}
-                          onChange={(e) => {
-                            const b = [...moduleForm.blocks];
-                            b[idx].content = e.target.value;
-                            setModuleForm({ ...moduleForm, blocks: b });
-                          }}
-                          className="w-full p-2 text-xs border rounded-xl"
-                        />
-                      ) : (
-                        <div className="space-y-2">
-                          {block.content ? (
-                            <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
-                              <span className="text-[10px] text-emerald-700 font-bold truncate flex-1">{block.content}</span>
-                              <button
-                                onClick={() => {
-                                  const b = [...moduleForm.blocks];
-                                  b[idx].content = "";
-                                  setModuleForm({ ...moduleForm, blocks: b });
-                                }}
-                                className="text-[10px] text-rose-500 font-bold hover:underline whitespace-nowrap"
-                              >
-                                Quitar
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <label className="cursor-pointer px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
-                                <FileUp className="w-4 h-4" /> Subir {block.type === "video" ? "Video" : block.type === "image" ? "Imagen" : block.type === "pdf" ? "PDF" : "Presentación"}
-                                <input
-                                  type="file"
-                                  className="hidden"
-                                  accept={
-                                    block.type === "video" ? "video/*" :
-                                    block.type === "image" ? "image/*" :
-                                    block.type === "pdf" ? ".pdf" :
-                                    ".pptx,.ppt,.key,.odp"
-                                  }
-                                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], idx)}
-                                />
-                              </label>
-                              <span className="text-[10px] text-gray-400">o pega una URL</span>
-                            </div>
-                          )}
-                          {block.content ? null : (
-                            <input
-                              type="text"
-                              placeholder={`URL externa (${block.type})`}
-                              value={block.content}
-                              onChange={(e) => {
-                                const b = [...moduleForm.blocks];
-                                b[idx].content = e.target.value;
-                                setModuleForm({ ...moduleForm, blocks: b });
-                              }}
-                              className="w-full p-2 text-xs border rounded-xl"
-                            />
-                          )}
-                          <input
-                            type="text"
-                            placeholder="Leyenda / Título corto (opcional)"
-                            aria-label="Leyenda del bloque"
-                            value={block.caption || ""}
+                    <ImageUpload
+                      label="Portada del módulo (opcional)"
+                      carpeta="portadas/modulos"
+                      value={moduleForm.imagen_url}
+                      onChange={(url) => setModuleForm({ ...moduleForm, imagen_url: url })}
+                    />
+                  </div>
+                )}
+
+                {/* BLOQUES MULTIMEDIA */}
+                {wizardStep === 1 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-sm text-gray-800">Bloques de Contenido</h4>
+                      <div className="flex gap-1">
+                        {(["text", "image", "video", "slides", "pdf"] as const).map((type) => (
+                          <button
+                            key={type}
+                            onClick={() =>
+                              setModuleForm({
+                                ...moduleForm,
+                                blocks: [...moduleForm.blocks, { type, content: "", caption: "" }]
+                              })
+                            }
+                            className="px-2.5 py-1 bg-gray-100 hover:bg-purple-100 hover:text-purple-700 text-gray-600 rounded-lg text-xs font-bold"
+                          >
+                            + {BLOCK_LABELS[type]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {moduleForm.blocks.map((block, idx) => (
+                      <div key={idx} className="p-3 bg-gray-50 rounded-2xl border space-y-2 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-purple-700 uppercase">Bloque #{idx + 1} · {BLOCK_LABELS[block.type] || block.type}</span>
+                          <button
+                            onClick={() => {
+                              const newBlocks = moduleForm.blocks.filter((_, i) => i !== idx);
+                              setModuleForm({ ...moduleForm, blocks: newBlocks });
+                            }}
+                            aria-label={`Eliminar bloque ${idx + 1}`}
+                            className="text-rose-500 hover:text-rose-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {block.type === "text" ? (
+                          <textarea
+                            rows={3}
+                            placeholder="Escribe el contenido de este bloque..."
+                            aria-label="Contenido del bloque de texto"
+                            value={block.content}
                             onChange={(e) => {
                               const b = [...moduleForm.blocks];
-                              b[idx].caption = e.target.value;
+                              b[idx].content = e.target.value;
                               setModuleForm({ ...moduleForm, blocks: b });
                             }}
                             className="w-full p-2 text-xs border rounded-xl"
                           />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {block.content ? (
+                              <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
+                                <span className="text-[10px] text-emerald-700 font-bold truncate flex-1">{block.content}</span>
+                                <button
+                                  onClick={() => {
+                                    const b = [...moduleForm.blocks];
+                                    b[idx].content = "";
+                                    setModuleForm({ ...moduleForm, blocks: b });
+                                  }}
+                                  className="text-[10px] text-rose-500 font-bold hover:underline whitespace-nowrap"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <label className="cursor-pointer px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
+                                  <FileUp className="w-4 h-4" /> Subir {block.type === "video" ? "Video" : block.type === "image" ? "Imagen" : block.type === "pdf" ? "PDF" : "Presentación"}
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    accept={
+                                      block.type === "video" ? "video/*" :
+                                      block.type === "image" ? "image/*" :
+                                      block.type === "pdf" ? ".pdf" :
+                                      ".pptx,.ppt,.key,.odp"
+                                    }
+                                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], idx)}
+                                  />
+                                </label>
+                                <span className="text-[10px] text-gray-400">o pega una URL</span>
+                              </div>
+                            )}
+                            {block.content ? null : (
+                              <input
+                                type="text"
+                                placeholder={`URL externa (${block.type})`}
+                                value={block.content}
+                                onChange={(e) => {
+                                  const b = [...moduleForm.blocks];
+                                  b[idx].content = e.target.value;
+                                  setModuleForm({ ...moduleForm, blocks: b });
+                                }}
+                                className="w-full p-2 text-xs border rounded-xl"
+                              />
+                            )}
+                            <input
+                              type="text"
+                              placeholder="Leyenda / Título corto (opcional)"
+                              aria-label="Leyenda del bloque"
+                              value={block.caption || ""}
+                              onChange={(e) => {
+                                const b = [...moduleForm.blocks];
+                                b[idx].caption = e.target.value;
+                                setModuleForm({ ...moduleForm, blocks: b });
+                              }}
+                              className="w-full p-2 text-xs border rounded-xl"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* EVALUACIONES */}
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-sm text-gray-900">Evaluaciones ({moduleForm.evaluaciones.length})</h4>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setModuleForm({
-                          ...moduleForm,
-                          evaluaciones: [
-                            ...moduleForm.evaluaciones,
-                            createDefaultEvaluation(moduleForm.evaluaciones.length)
-                          ]
-                        })
-                      }
-                      className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Agregar Evaluación
-                    </button>
+                {wizardStep === 2 && (moduleForm.tipo === "intro" ? (
+                  <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl text-center space-y-1">
+                    <p className="text-sm font-bold text-amber-900">La introducción no lleva evaluación</p>
+                    <p className="text-xs text-amber-700">Los estudiantes la ven antes del primer módulo. Continúa para revisar y guardar.</p>
                   </div>
+                ) : (
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-sm text-gray-900">Evaluaciones ({moduleForm.evaluaciones.length})</h4>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setModuleForm({
+                            ...moduleForm,
+                            evaluaciones: [
+                              ...moduleForm.evaluaciones,
+                              createDefaultEvaluation(moduleForm.evaluaciones.length)
+                            ]
+                          })
+                        }
+                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Agregar Evaluación
+                      </button>
+                    </div>
 
-                  {moduleForm.evaluaciones.map((evaluacion, evalIdx) => (
-                    <div key={evalIdx} className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <input
-                          type="text"
-                          placeholder="Título de la Evaluación"
-                          aria-label="Título de la evaluación"
-                          value={evaluacion.titulo}
-                          onChange={(e) => {
-                            const evs = [...moduleForm.evaluaciones];
-                            evs[evalIdx].titulo = e.target.value;
-                            setModuleForm({ ...moduleForm, evaluaciones: evs });
-                          }}
-                          className="px-2.5 py-1.5 bg-white border rounded-xl text-xs font-bold text-purple-900"
-                        />
+                    {moduleForm.evaluaciones.map((evaluacion, evalIdx) => (
+                      <div key={evalIdx} className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <input
+                            type="text"
+                            placeholder="Título de la Evaluación"
+                            aria-label="Título de la evaluación"
+                            value={evaluacion.titulo}
+                            onChange={(e) => {
+                              const evs = [...moduleForm.evaluaciones];
+                              evs[evalIdx].titulo = e.target.value;
+                              setModuleForm({ ...moduleForm, evaluaciones: evs });
+                            }}
+                            className="px-2.5 py-1.5 bg-white border rounded-xl text-xs font-bold text-purple-900"
+                          />
 
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                            <span>Min:</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              aria-label="Puntaje mínimo para aprobar"
-                              value={evaluacion.min_score}
-                              onChange={(e) => {
-                                const evs = [...moduleForm.evaluaciones];
-                                evs[evalIdx].min_score = Number(e.target.value);
-                                setModuleForm({ ...moduleForm, evaluaciones: evs });
-                              }}
-                              className="w-14 px-2 py-1 bg-white border rounded-lg text-center font-bold"
-                            />
-                            <span>%</span>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <span>Min:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                aria-label="Puntaje mínimo para aprobar"
+                                value={evaluacion.min_score}
+                                onChange={(e) => {
+                                  const evs = [...moduleForm.evaluaciones];
+                                  evs[evalIdx].min_score = Number(e.target.value);
+                                  setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                }}
+                                className="w-14 px-2 py-1 bg-white border rounded-lg text-center font-bold"
+                              />
+                              <span>%</span>
+                            </div>
+
+                            {moduleForm.evaluaciones.length > 1 && (
+                              <button
+                                onClick={() => {
+                                  const evs = moduleForm.evaluaciones.filter((_, i) => i !== evalIdx);
+                                  setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                }}
+                                aria-label={`Eliminar evaluación ${evalIdx + 1}`}
+                                className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
+                        </div>
 
-                          {moduleForm.evaluaciones.length > 1 && (
-                            <button
-                              onClick={() => {
-                                const evs = moduleForm.evaluaciones.filter((_, i) => i !== evalIdx);
-                                setModuleForm({ ...moduleForm, evaluaciones: evs });
-                              }}
-                              aria-label={`Eliminar evaluación ${evalIdx + 1}`}
-                              className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                        {/* PREGUNTAS */}
+                        <div className="space-y-3 pl-2">
+                          {evaluacion.preguntas.map((q, qIdx) => (
+                            <div key={qIdx} className="p-3 bg-white rounded-xl border space-y-3 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-gray-700">Pregunta #{qIdx + 1}</span>
+                                <button
+                                  onClick={() => {
+                                    const evs = [...moduleForm.evaluaciones];
+                                    evs[evalIdx].preguntas = evs[evalIdx].preguntas.filter((_, i) => i !== qIdx);
+                                    setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                  }}
+                                  aria-label={`Eliminar pregunta ${qIdx + 1}`}
+                                  className="text-rose-500 hover:text-rose-700"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <input
+                                type="text"
+                                placeholder="Escribe la pregunta..."
+                                aria-label="Texto de la pregunta"
+                                value={q.question}
+                                onChange={(e) => {
+                                  const evs = [...moduleForm.evaluaciones];
+                                  evs[evalIdx].preguntas[qIdx].question = e.target.value;
+                                  setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                }}
+                                className="w-full p-2 border rounded-lg font-medium outline-none focus:border-purple-500"
+                              />
+
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                {q.options.map((opt, optIdx) => (
+                                  <div key={optIdx} className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-lg border">
+                                    <input
+                                      type="radio"
+                                      name={`correct_${evalIdx}_${qIdx}`}
+                                      checked={q.correct === optIdx}
+                                      aria-label={`Marcar opción ${optIdx + 1} como correcta`}
+                                      onChange={() => {
+                                        const evs = [...moduleForm.evaluaciones];
+                                        evs[evalIdx].preguntas[qIdx].correct = optIdx;
+                                        setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                      }}
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder={`Opción ${optIdx + 1}`}
+                                      aria-label={`Texto de la opción ${optIdx + 1}`}
+                                      value={opt}
+                                      onChange={(e) => {
+                                        const evs = [...moduleForm.evaluaciones];
+                                        evs[evalIdx].preguntas[qIdx].options[optIdx] = e.target.value;
+                                        setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                      }}
+                                      className="w-full bg-transparent border-none text-xs focus:outline-none"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* NUEVO CAMPO DE FEEDBACK / EXPLICACIÓN */}
+                              <div className="pt-2 border-t border-gray-100">
+                                <label className="text-[10px] font-bold text-gray-500 mb-1 flex items-center gap-1">
+                                  <HelpCircle className="w-3 h-3 text-purple-600" />
+                                  Retroalimentación / Explicación (se muestra si falla la pregunta)
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Ej: Recuerda que la Participación Juvenil requiere asumir un rol activo en la toma de decisiones..."
+                                  value={q.explanation || ""}
+                                  onChange={(e) => {
+                                    const evs = [...moduleForm.evaluaciones];
+                                    evs[evalIdx].preguntas[qIdx].explanation = e.target.value;
+                                    setModuleForm({ ...moduleForm, evaluaciones: evs });
+                                  }}
+                                  className="w-full p-2 bg-purple-50/40 border border-purple-100 rounded-lg text-xs outline-none focus:ring-1 focus:ring-purple-500 resize-none text-gray-700"
+                                />
+                              </div>
+                            </div>
+                          ))}
+
+                          <button
+                            onClick={() => {
+                              const evs = [...moduleForm.evaluaciones];
+                              evs[evalIdx].preguntas.push(createDefaultQuestion());
+                              setModuleForm({ ...moduleForm, evaluaciones: evs });
+                            }}
+                            className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold text-xs hover:bg-purple-200 transition-colors"
+                          >
+                            + Agregar Pregunta
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+
+                {/* REVISIÓN FINAL */}
+                {wizardStep === 3 && (() => {
+                  const filledBlocks = normalizeBlocks(moduleForm.blocks);
+                  const evalSummary = moduleForm.tipo === "intro" ? [] : moduleForm.evaluaciones.map((ev) => ({
+                    titulo: ev.titulo,
+                    min_score: ev.min_score,
+                    validas: buildQuizPayload(ev.preguntas).length,
+                    incompletas: ev.preguntas.filter((q) => q.question.trim() && q.options.some((o) => !o.trim())).length
+                  }));
+                  const warnings = [
+                    filledBlocks.length === 0 && "El módulo no tiene contenido: los bloques vacíos no se guardan.",
+                    ...evalSummary.map((ev) => ev.validas === 0 && `"${ev.titulo}" no tiene preguntas; los estudiantes no la verán.`),
+                    ...evalSummary.map((ev) => ev.incompletas > 0 && `"${ev.titulo}" tiene ${ev.incompletas} pregunta(s) con opciones vacías.`)
+                  ].filter(Boolean) as string[];
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        {moduleForm.imagen_url ? (
+                          <img src={moduleForm.imagen_url} alt="" className="w-32 h-20 object-cover rounded-xl shrink-0" />
+                        ) : (
+                          <div className="w-32 h-20 rounded-xl bg-purple-100 text-purple-400 flex items-center justify-center shrink-0">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black text-gray-900 text-sm truncate">{moduleForm.title}</h4>
+                            {moduleForm.tipo === "intro" && (
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">Intro</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">{moduleForm.duration || "Sin duración"}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-4 rounded-2xl border border-gray-100 space-y-2">
+                          <p className="text-xs font-black text-gray-800">Contenido · {filledBlocks.length} bloque(s)</p>
+                          <ul className="space-y-1">
+                            {filledBlocks.map((b, i) => (
+                              <li key={i} className="text-xs text-gray-600 truncate">
+                                {i + 1}. <span className="font-bold">{BLOCK_LABELS[b.type as ContentBlock["type"]]}</span>
+                                {b.caption ? ` · ${b.caption}` : b.type === "text" ? ` · ${b.content.slice(0, 60)}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="p-4 rounded-2xl border border-gray-100 space-y-2">
+                          <p className="text-xs font-black text-gray-800">Evaluaciones · {evalSummary.length}</p>
+                          {evalSummary.length === 0 ? (
+                            <p className="text-xs text-gray-400">Sin evaluación</p>
+                          ) : (
+                            <ul className="space-y-1">
+                              {evalSummary.map((ev, i) => (
+                                <li key={i} className="text-xs text-gray-600">
+                                  <span className="font-bold">{ev.titulo}</span> · {ev.validas} pregunta(s) · mínimo {ev.min_score}%
+                                </li>
+                              ))}
+                            </ul>
                           )}
                         </div>
                       </div>
 
-                      {/* PREGUNTAS */}
-                      <div className="space-y-3 pl-2">
-                        {evaluacion.preguntas.map((q, qIdx) => (
-                          <div key={qIdx} className="p-3 bg-white rounded-xl border space-y-3 text-xs">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-gray-700">Pregunta #{qIdx + 1}</span>
-                              <button
-                                onClick={() => {
-                                  const evs = [...moduleForm.evaluaciones];
-                                  evs[evalIdx].preguntas = evs[evalIdx].preguntas.filter((_, i) => i !== qIdx);
-                                  setModuleForm({ ...moduleForm, evaluaciones: evs });
-                                }}
-                                aria-label={`Eliminar pregunta ${qIdx + 1}`}
-                                className="text-rose-500 hover:text-rose-700"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            <input
-                              type="text"
-                              placeholder="Escribe la pregunta..."
-                              aria-label="Texto de la pregunta"
-                              value={q.question}
-                              onChange={(e) => {
-                                const evs = [...moduleForm.evaluaciones];
-                                evs[evalIdx].preguntas[qIdx].question = e.target.value;
-                                setModuleForm({ ...moduleForm, evaluaciones: evs });
-                              }}
-                              className="w-full p-2 border rounded-lg font-medium outline-none focus:border-purple-500"
-                            />
-
-                            <div className="grid grid-cols-2 gap-2 pt-1">
-                              {q.options.map((opt, optIdx) => (
-                                <div key={optIdx} className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-lg border">
-                                  <input
-                                    type="radio"
-                                    name={`correct_${evalIdx}_${qIdx}`}
-                                    checked={q.correct === optIdx}
-                                    aria-label={`Marcar opción ${optIdx + 1} como correcta`}
-                                    onChange={() => {
-                                      const evs = [...moduleForm.evaluaciones];
-                                      evs[evalIdx].preguntas[qIdx].correct = optIdx;
-                                      setModuleForm({ ...moduleForm, evaluaciones: evs });
-                                    }}
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder={`Opción ${optIdx + 1}`}
-                                    aria-label={`Texto de la opción ${optIdx + 1}`}
-                                    value={opt}
-                                    onChange={(e) => {
-                                      const evs = [...moduleForm.evaluaciones];
-                                      evs[evalIdx].preguntas[qIdx].options[optIdx] = e.target.value;
-                                      setModuleForm({ ...moduleForm, evaluaciones: evs });
-                                    }}
-                                    className="w-full bg-transparent border-none text-xs focus:outline-none"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* NUEVO CAMPO DE FEEDBACK / EXPLICACIÓN */}
-                            <div className="pt-2 border-t border-gray-100">
-                              <label className="text-[10px] font-bold text-gray-500 mb-1 flex items-center gap-1">
-                                <HelpCircle className="w-3 h-3 text-purple-600" />
-                                Retroalimentación / Explicación (se muestra si falla la pregunta)
-                              </label>
-                              <textarea
-                                rows={2}
-                                placeholder="Ej: Recuerda que la Participación Juvenil requiere asumir un rol activo en la toma de decisiones..."
-                                value={q.explanation || ""}
-                                onChange={(e) => {
-                                  const evs = [...moduleForm.evaluaciones];
-                                  evs[evalIdx].preguntas[qIdx].explanation = e.target.value;
-                                  setModuleForm({ ...moduleForm, evaluaciones: evs });
-                                }}
-                                className="w-full p-2 bg-purple-50/40 border border-purple-100 rounded-lg text-xs outline-none focus:ring-1 focus:ring-purple-500 resize-none text-gray-700"
-                              />
-                            </div>
-                          </div>
-                        ))}
-
-                        <button
-                          onClick={() => {
-                            const evs = [...moduleForm.evaluaciones];
-                            evs[evalIdx].preguntas.push(createDefaultQuestion());
-                            setModuleForm({ ...moduleForm, evaluaciones: evs });
-                          }}
-                          className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold text-xs hover:bg-purple-200 transition-colors"
-                        >
-                          + Agregar Pregunta
-                        </button>
-                      </div>
+                      {warnings.length > 0 && (
+                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-1">
+                          {warnings.map((w) => (
+                            <p key={w} className="text-xs text-amber-800 flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> {w}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 <div className="flex gap-3 pt-4 border-t">
                   <button
-                    onClick={() => setModuleForm(null)}
-                    className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-200 transition-colors"
+                    onClick={() => (wizardStep === 0 ? setModuleForm(null) : setWizardStep(wizardStep - 1))}
+                    className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
                   >
-                    Cancelar
+                    {wizardStep === 0 ? "Cancelar" : <><ChevronLeft className="w-4 h-4" /> Atrás</>}
                   </button>
-                  <button
-                    onClick={handleSaveModule}
-                    disabled={uploading}
-                    className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-colors"
-                  >
-                    {uploading ? "Guardando..." : "Guardar Módulo"}
-                  </button>
+                  {wizardStep < WIZARD_STEPS.length - 1 ? (
+                    <button
+                      onClick={() => goToStep(wizardStep + 1)}
+                      className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-1"
+                    >
+                      Siguiente: {WIZARD_STEPS[wizardStep + 1].title} <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSaveModule}
+                      disabled={uploading}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Check className="w-4 h-4" /> {uploading ? "Guardando..." : "Guardar Módulo"}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

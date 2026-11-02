@@ -10,12 +10,13 @@ import {
   Lock,
   CheckCircle2,
   Trophy,
-  Printer,
   XCircle,
   BookOpen
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
+import { descargarCertificadoPDF, CERTIFICADO_FONDO_URL } from "../lib/certificado";
+import { toast } from "sonner";
 
 interface ContentBlock {
   type: "text" | "image" | "video" | "slides" | "pdf";
@@ -44,6 +45,7 @@ interface ModuleData {
   contenido: any;
   evaluaciones: EvaluationData[];
   tipo: string;
+  imagen_url: string | null;
 }
 
 interface CourseData {
@@ -51,6 +53,7 @@ interface CourseData {
   titulo: string;
   descripcion: string;
   badge: string;
+  imagen_url: string | null;
 }
 
 export default function CourseDetailScreen({ userProfile }: { userProfile?: any }) {
@@ -72,6 +75,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
   
   // Estado para ver el certificado final
   const [showCertificate, setShowCertificate] = useState(false);
+  const [downloadingCert, setDownloadingCert] = useState(false);
 
   // Estado para módulo de introducción
   const [showIntro, setShowIntro] = useState(false);
@@ -112,7 +116,8 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
         id: courseData.id,
         titulo: courseData.titulo || courseData.title || "Sin título",
         descripcion: courseData.descripcion || courseData.summary || "",
-        badge: courseData.badge || "Capacitación"
+        badge: courseData.badge || "Capacitación",
+        imagen_url: courseData.imagen_url || courseData.cover_image || null
       });
 
       const modulesData = [...(courseData.modulos || [])].sort((a: any, b: any) => a.orden - b.orden);
@@ -177,7 +182,8 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
           duracion: mod.duration || mod.duracion || "45 min",
           contenido: finalContentBlocks,
           evaluaciones: modEvals,
-          tipo: mod.tipo || "regular"
+          tipo: mod.tipo || "regular",
+          imagen_url: mod.imagen_url || null
         };
       });
 
@@ -371,9 +377,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-8 rounded-3xl shadow-lg space-y-3 relative overflow-hidden">
         {/* Imagen de portada como fondo */}
-        {(course.imagen_url || course.cover_image || course.img) && (
+        {course.imagen_url && (
           <img
-            src={course.imagen_url || course.cover_image || course.img}
+            src={course.imagen_url}
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
           />
@@ -512,7 +518,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
                 id="certificado-area"
                 className="relative w-full rounded-3xl overflow-hidden shadow-2xl"
                 style={{
-                  backgroundImage: `url("https://jjhcwaopnwfevbuirxku.supabase.co/storage/v1/object/public/bucket/Certificado%20de%20Reconocimiento%20Elegante%20Verde%20y%20Beige.png")`,
+                  backgroundImage: `url("${CERTIFICADO_FONDO_URL}")`,
                   backgroundSize: "contain",
                   backgroundRepeat: "no-repeat",
                   backgroundPosition: "center",
@@ -537,30 +543,20 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
 
               <div className="flex justify-center gap-3">
                 <button
-                  onClick={() => {
-                    const printWindow = window.open("", "_blank");
-                    if (!printWindow) return;
-                    printWindow.document.write(`
-                      <html><head><title>Certificado</title>
-                      <style>
-                        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
-                        .cert { position: relative; width: 900px; height: 636px; background-image: url("https://jjhcwaopnwfevbuirxku.supabase.co/storage/v1/object/public/bucket/Certificado%20de%20Reconocimiento%20Elegante%20Verde%20y%20Beige.png"); background-size: contain; background-repeat: no-repeat; background-position: center; }
-                        .name { position: absolute; top: 43%; left: 50%; transform: translateX(-50%); width: 60%; text-align: center; font-family: Georgia, serif; font-size: 24px; font-weight: 900; color: #111; }
-                        .name-line { width: 100%; height: 1px; background: #999; margin-top: 4px; }
-                        .course { position: absolute; top: 60%; left: 50%; transform: translateX(-50%); width: 80%; text-align: center; font-family: Arial, sans-serif; font-size: 28px; font-weight: 900; color: #6b21a8; text-transform: uppercase; letter-spacing: 1px; }
-                      </style></head><body>
-                        <div class="cert">
-                          <div class="name">${userProfile?.name || "Participante Destacado"}<div class="name-line"></div></div>
-                          <div class="course">${course.titulo}</div>
-                        </div>
-                      </body></html>
-                    `);
-                    printWindow.document.close();
-                    printWindow.onload = () => { printWindow.print(); };
+                  onClick={async () => {
+                    setDownloadingCert(true);
+                    try {
+                      await descargarCertificadoPDF(userProfile?.name || "Participante Destacado", course.titulo);
+                    } catch (err: any) {
+                      toast.error(err.message || "No se pudo generar el certificado.");
+                    } finally {
+                      setDownloadingCert(false);
+                    }
                   }}
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2"
+                  disabled={downloadingCert}
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-60"
                 >
-                  <Printer className="w-4 h-4" /> Imprimir / Guardar Certificado
+                  <FileDown className="w-4 h-4" /> {downloadingCert ? "Generando PDF..." : "Descargar Certificado (PDF)"}
                 </button>
                 <button
                   onClick={() => setShowCertificate(false)}
@@ -680,6 +676,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
               const introModule = modules.find((m) => m.tipo === "intro")!;
               return (
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                  {introModule.imagen_url && (
+                    <img src={introModule.imagen_url} alt="" className="w-full h-48 object-cover rounded-2xl" />
+                  )}
                   <div className="border-b pb-4">
                     <span className="text-xs font-bold text-purple-600 uppercase">Introducción</span>
                     <h2 className="text-xl font-black text-gray-900">{introModule.titulo || "Bienvenido al Curso"}</h2>
@@ -714,6 +713,9 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
           ) : activeModule ? (
             /* Visor de Módulo */
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-h-[600px]">
+              {activeModule.imagen_url && currentBlockIndex === 0 && (
+                <img src={activeModule.imagen_url} alt="" className="w-full h-48 object-cover rounded-2xl mb-6" />
+              )}
               <div className="border-b pb-4 mb-6">
                 <span className="text-xs font-bold text-purple-600 uppercase">Módulo</span>
                 <h2 className="text-xl font-black text-gray-900">{activeModule.titulo}</h2>

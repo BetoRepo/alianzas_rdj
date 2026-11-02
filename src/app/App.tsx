@@ -10,6 +10,8 @@ import LoginScreen from "./components/LoginScreen";
 import { CommandPalette } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/ui/LoadingSpinner";
+import { CompletarPerfilModal } from "./components/CompletarPerfilModal";
+import { perfilIncompleto } from "./lib/profile";
 
 const AdminDashboard = lazy(() => import("./components/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
 const UsersScreen = lazy(() => import("./components/UsersScreen").then(m => ({ default: m.UsersScreen })));
@@ -69,6 +71,11 @@ export default function App() {
 
   const currentPath = location.pathname.split("/")[1] || "dashboard";
 
+  function logout() {
+    void cerrarSesion();
+    setProfile(null);
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F7FA] flex flex-col lg:flex-row pb-16 lg:pb-0 selection:bg-purple-200">
       <Toaster position="top-right" richColors />
@@ -82,8 +89,11 @@ export default function App() {
         role={profile.role}
         currentScreen={currentPath}
         onNavigate={(screen: string) => navigate(`/${screen}`)}
-        onLogout={() => { void cerrarSesion(); setProfile(null); }}
+        onLogout={logout}
       />
+      {perfilIncompleto(profile) && (
+        <CompletarPerfilModal profile={profile} onSave={(updated) => setProfile(updated)} onLogout={logout} />
+      )}
 
       <main className="flex-1 flex flex-col min-w-0 w-full lg:pl-1 lg:pr-4 lg:py-4">
         <header className="bg-white border-b lg:border-none lg:rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm sticky top-0 z-20 lg:mt-2">
