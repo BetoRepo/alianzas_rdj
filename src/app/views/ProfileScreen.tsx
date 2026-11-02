@@ -88,8 +88,12 @@ export default function ProfileScreen({
       <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-6">
         <div className="flex items-center gap-4 border-b border-gray-100 pb-6">
           {/* Avatar dinámico en vivo */}
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-xl font-black text-white shadow-md transition-all">
-            {avatar || "S"}
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-xl font-black text-white shadow-md transition-all overflow-hidden">
+            {!avatar || avatar === "S" ? (
+              <img src="/images/flor-de-lis.svg" alt="" className="w-full h-full object-contain p-1" />
+            ) : (
+              avatar
+            )}
           </div>
           <div>
             <h2 className="text-base font-black text-gray-900">{name || "Miembro Scout"}</h2>

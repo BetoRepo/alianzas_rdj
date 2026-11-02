@@ -35,7 +35,7 @@ export default function HomeScreen({ userProfile }: { userProfile: any }) {
         />
         <div className="space-y-1.5 z-10">
           <span className="text-[10px] font-black uppercase tracking-widest text-purple-200 bg-purple-950/40 px-3 py-1 rounded-full border border-purple-400/20">
-            Siempre Listos
+            Preparados para la vida
           </span>
           <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: "Nunito, sans-serif" }}>
             ¡Hola, {userProfile?.name || "Scout"}! 👋

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { LogIn, UserPlus, Mail, Lock, User, KeyRound, ArrowLeft, CheckCircle, Compass } from "lucide-react";
 import { toast } from "sonner";
 import { iniciarSesion, registrar } from "../lib/auth";
@@ -62,11 +62,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo superior */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #FBC02D, #f59e0b)" }}>
-              <Compass className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src="/images/logo-asove.svg"
+              alt=""
+              className="h-16 w-auto object-contain"
+            />
             <span className="text-white font-black text-lg tracking-tight" style={{ fontFamily: "Nunito, sans-serif" }}>
-              Alianzas RDJ
+              Asociación de Scout de Venezuela
             </span>
           </div>
 
@@ -78,27 +80,14 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             <p className="text-purple-200 text-sm leading-relaxed max-w-md">
               Accede a cursos de liderazgo, supervivencia y valores. Completa modulos, gana insignias y alcanza tu siguiente rango.
             </p>
-            {/* Stats decorativos */}
-            <div className="flex gap-6 pt-4">
-              <div>
-                <p className="text-2xl font-black text-[#FBC02D]">12+</p>
-                <p className="text-[10px] text-purple-300 font-bold uppercase tracking-wider">Cursos</p>
-              </div>
-              <div>
-                <p className="text-2xl font-black text-[#FBC02D]">50+</p>
-                <p className="text-[10px] text-purple-300 font-bold uppercase tracking-wider">Modulos</p>
-              </div>
-              <div>
-                <p className="text-2xl font-black text-[#FBC02D]">100+</p>
-                <p className="text-[10px] text-purple-300 font-bold uppercase tracking-wider">Scouts</p>
-              </div>
-            </div>
           </div>
 
-          {/* Footer */}
-          <p className="text-purple-400 text-[10px] font-bold uppercase tracking-widest">
-            Siempre Listos &mdash; Alianzas RDJ
-          </p>
+          {/* Footer: logo World Scouting */}
+          <img
+            src="/images/world-scouting.svg"
+            alt="World Scouting"
+            className="h-12 w-auto object-contain opacity-90"
+          />
         </div>
       </div>
 
@@ -108,11 +97,12 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         <div className="w-full max-w-md space-y-8">
           {/* Logo movil (solo visible en mobile) */}
           <div className="lg:hidden flex flex-col items-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-md"
-                 style={{ background: "linear-gradient(135deg, #622599, #4a1c75)" }}>
-              <span className="text-white font-black text-lg" style={{ fontFamily: "Nunito, sans-serif" }}>S</span>
-            </div>
-            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Alianzas RDJ</p>
+            <img
+              src="/images/logo-asove.svg"
+              alt=""
+              className="h-16 w-auto object-contain"
+            />
+            <p className="text-[10px] text-purple-600 font-bold uppercase tracking-widest">Asociación Scout de Venezuela</p>
           </div>
 
           {/* Tarjeta del formulario */}

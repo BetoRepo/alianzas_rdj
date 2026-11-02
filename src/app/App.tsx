@@ -148,6 +148,15 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </div>
+
+        {/* Pie de página del dashboard */}
+        <footer className="flex justify-center py-6 mt-2">
+          <img
+            src="/images/logo-wordmark.svg"
+            alt=""
+            className="h-9 w-auto opacity-80"
+          />
+        </footer>
       </main>
     </div>
   );
