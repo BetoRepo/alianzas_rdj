@@ -42,6 +42,12 @@ export function calcularEdad(fechaNacimiento?: string | null) {
   return edad;
 }
 
+// Lo que se muestra bajo el nombre: la rama para los usuarios, el cargo para los admin
+export function etiquetaPerfil(profile: any) {
+  if (profile?.role === "admin") return profile.role_label || "Administrador";
+  return ramaDeUnidad(profile?.unidad) || profile?.role_label || "Miembro Activo";
+}
+
 // Un perfil recién creado no tiene estos datos; se piden al ingresar
 export function perfilIncompleto(profile: any) {
   return !profile?.fecha_nacimiento || !ramaDeUnidad(profile?.unidad) ||

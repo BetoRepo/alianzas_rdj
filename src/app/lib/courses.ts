@@ -108,3 +108,30 @@ export async function getUserDashboardStats(userId: string) {
     totalModules: modules.length,
   };
 }
+
+// Cursos con todos sus módulos regulares completados (la introducción no cuenta,
+// igual que para mostrar el certificado), con la fecha del último módulo terminado
+export async function getCompletedCourses(userId: string) {
+  const [{ data: courses }, { data: progress }] = await Promise.all([
+    supabase.from("cursos").select("id, titulo, imagen_url, badge, modulos(id, tipo)"),
+    supabase.from("progreso_modulo").select("modulo_id, updated_at").eq("user_id", userId).eq("completado", true)
+  ]);
+
+  const completedAt = new Map((progress || []).map((p) => [p.modulo_id, p.updated_at as string | null]));
+
+  return (courses || [])
+    .map((c: any) => {
+      const regular = (c.modulos || []).filter((m: any) => m.tipo !== "intro");
+      if (regular.length === 0 || !regular.every((m: any) => completedAt.has(m.id))) return null;
+      const fechas = regular.map((m: any) => completedAt.get(m.id)).filter(Boolean).sort();
+      return {
+        id: c.id as number,
+        titulo: (c.titulo || "Curso") as string,
+        imagen_url: (c.imagen_url || null) as string | null,
+        badge: (c.badge || null) as string | null,
+        completedAt: (fechas.at(-1) || null) as string | null
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null)
+    .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
+}

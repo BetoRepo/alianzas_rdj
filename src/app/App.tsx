@@ -11,7 +11,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/ui/LoadingSpinner";
 import { CompletarPerfilModal } from "./components/CompletarPerfilModal";
-import { perfilIncompleto } from "./lib/profile";
+import { perfilIncompleto, etiquetaPerfil } from "./lib/profile";
 
 const AdminDashboard = lazy(() => import("./components/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
 const UsersScreen = lazy(() => import("./components/UsersScreen").then(m => ({ default: m.UsersScreen })));
@@ -103,7 +103,7 @@ export default function App() {
             </div>
             <div>
               <h2 className="text-xs font-black text-gray-800 tracking-tight">{profile.name}</h2>
-              <p className="text-[10px] text-[#622599] font-bold mt-0.5">{profile.role_label}</p>
+              <p className="text-[10px] text-[#622599] font-bold mt-0.5">{etiquetaPerfil(profile)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
