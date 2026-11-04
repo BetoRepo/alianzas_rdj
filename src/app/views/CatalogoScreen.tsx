@@ -1,20 +1,26 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, BookOpen, Clock, ArrowRight, Award } from "lucide-react";
-import { getCourses } from "../lib/courses";
+import { Search, BookOpen, Clock, ArrowRight, Award, Lock } from "lucide-react";
+import { toast } from "sonner";
+import { getCourses, getCompletedCourses, cursoBloqueado } from "../lib/courses";
 
-export default function CatalogoScreen() {
+export default function CatalogoScreen({ userProfile }: { userProfile?: any }) {
   const navigate = useNavigate();
   const [courses, setCourses] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [completedIds, setCompletedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     async function loadCatalog() {
       setLoading(true);
       try {
-        const data = await getCourses();
+        const [data, completados] = await Promise.all([
+          getCourses(),
+          userProfile?.id ? getCompletedCourses(userProfile.id) : Promise.resolve([])
+        ]);
         setCourses(data || []);
+        setCompletedIds(new Set(completados.map((c) => c.id)));
       } catch (error) {
         console.error("Error cargando el catálogo:", error);
       } finally {
@@ -22,7 +28,7 @@ export default function CatalogoScreen() {
       }
     }
     void loadCatalog();
-  }, []);
+  }, [userProfile?.id]);
 
   // Filtrado dinámico por título o descripción
   const filteredCourses = courses.filter((course) => {
@@ -83,16 +89,24 @@ export default function CatalogoScreen() {
               : "Explora este módulo para adquirir nuevas habilidades y fortalezas en tu área Scout.";
             const duration = course.duracion || course.duration || "1 hora";
             const cover = course.imagen_url || course.cover_image || course.img;
+            const requisito = cursoBloqueado(course, courses, completedIds, userProfile?.role === "admin");
 
             return (
               <div
                 key={course.id}
-                onClick={() => navigate(`/curso/${course.id}`)}
-                className="bg-white rounded-3xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                onClick={() =>
+                  requisito
+                    ? toast.info(`Primero completa el curso "${requisito.titulo || requisito.title}".`)
+                    : navigate(`/curso/${course.id}`)
+                }
+                aria-disabled={requisito ? true : undefined}
+                className={`bg-white rounded-3xl border border-gray-100 p-5 shadow-sm transition-all group flex flex-col justify-between ${
+                  requisito ? "cursor-not-allowed" : "hover:shadow-md cursor-pointer"
+                }`}
               >
                 <div className="space-y-3">
                   {/* Imagen del curso (siempre visible) */}
-                  <div className="w-full h-36 rounded-2xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-100">
+                  <div className="relative w-full h-36 rounded-2xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-100">
                     {cover ? (
                       <img
                         src={cover}
@@ -102,6 +116,12 @@ export default function CatalogoScreen() {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <BookOpen className="w-10 h-10 text-purple-300" />
+                      </div>
+                    )}
+                    {requisito && (
+                      <div className="absolute inset-0 bg-gray-900/55 flex flex-col items-center justify-center gap-1 text-white">
+                        <Lock className="w-7 h-7" />
+                        <span className="text-[11px] font-bold">Bloqueado</span>
                       </div>
                     )}
                   </div>
@@ -120,12 +140,19 @@ export default function CatalogoScreen() {
                   </p>
                 </div>
 
-                <div className="pt-4 mt-4 border-t border-gray-50 flex items-center justify-between text-xs font-bold text-purple-600">
-                  <span className="flex items-center gap-1">
-                    <Award className="w-4 h-4" /> Ver Programa
-                  </span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
+                {requisito ? (
+                  <div className="pt-4 mt-4 border-t border-gray-50 flex items-center gap-1.5 text-xs font-bold text-amber-700">
+                    <Lock className="w-4 h-4 shrink-0" />
+                    <span className="line-clamp-1">Primero completa: {requisito.titulo || requisito.title}</span>
+                  </div>
+                ) : (
+                  <div className="pt-4 mt-4 border-t border-gray-50 flex items-center justify-between text-xs font-bold text-purple-600">
+                    <span className="flex items-center gap-1">
+                      <Award className="w-4 h-4" /> Ver Programa
+                    </span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                )}
               </div>
             );
           })}

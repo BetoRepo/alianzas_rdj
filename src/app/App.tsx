@@ -139,7 +139,7 @@ export default function App() {
                     path="/dashboard"
                     element={profile.role === "admin" ? <AdminDashboard /> : <UserDashboard userProfile={profile} />}
                   />
-                  <Route path="/catalogo" element={<CatalogoScreen />} />
+                  <Route path="/catalogo" element={<CatalogoScreen userProfile={profile} />} />
                   <Route path="/mis-cursos" element={<InsigniasScreen userProfile={profile} />} />
                   <Route path="/curso/:id" element={<CursoDetalleScreen userProfile={profile} />} />
                   <Route path="/curso/:courseId/modulo/:moduleId" element={<ModuleViewerScreen userProfile={profile} />} />

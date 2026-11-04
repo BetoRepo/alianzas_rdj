@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, type FormEvent } from "react";
 import {
   PlusCircle, Trash2, X, BookOpen, Layers, Edit2, Plus, FileUp, HelpCircle, ArrowUp, ArrowDown,
-  Check, ChevronLeft, ChevronRight, AlertTriangle, Image as ImageIcon
+  Check, ChevronLeft, ChevronRight, AlertTriangle, Image as ImageIcon, Lock, Save
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase, subirArchivo } from "../lib/supabase";
@@ -86,6 +86,29 @@ function normalizeBlocks(blocks: ContentBlock[]) {
     .filter((block) => block.content.trim() || block.caption?.trim());
 }
 
+const EMPTY_COURSE = {
+  title: "",
+  badge: "Básico",
+  summary: "",
+  cover_image: "",
+  category: "General",
+  requisito_id: ""
+};
+
+// True si elegir `candidatoId` como requisito de `cursoId` formaría un ciclo
+// (A pide B y B pide A, directa o indirectamente)
+function formaCiclo(courses: any[], cursoId: number, candidatoId: number) {
+  const byId = new Map(courses.map((c) => [c.id, c]));
+  let actual: number | null = candidatoId;
+  const vistos = new Set<number>();
+  while (actual != null && !vistos.has(actual)) {
+    if (actual === cursoId) return true;
+    vistos.add(actual);
+    actual = byId.get(actual)?.requisito_id ?? null;
+  }
+  return false;
+}
+
 function buildQuizPayload(preguntas: QuizItem[]) {
   return preguntas
     .filter((q) => q.question.trim())
@@ -100,13 +123,8 @@ function buildQuizPayload(preguntas: QuizItem[]) {
 export default function AdminCursosScreen() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newCourse, setNewCourse] = useState({
-    title: "",
-    badge: "Básico",
-    summary: "",
-    cover_image: "",
-    category: "General"
-  });
+  const [newCourse, setNewCourse] = useState(EMPTY_COURSE);
+  const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
 
   const [activeCourse, setActiveCourse] = useState<any | null>(null);
   const [modules, setModules] = useState<any[]>([]);
@@ -135,33 +153,48 @@ export default function AdminCursosScreen() {
     setLoading(false);
   }
 
-  async function handleCreateCourse(e: FormEvent) {
+  async function handleSaveCourse(e: FormEvent) {
     e.preventDefault();
     if (!newCourse.title.trim()) return toast.warning("El título es requerido");
 
-    const { error } = await supabase.from("cursos").insert([
-      {
-        titulo: newCourse.title,
-        descripcion: newCourse.summary,
-        duracion: "1 hora",
-        imagen_url: newCourse.cover_image,
-        badge: newCourse.badge,
-        category: newCourse.category
-      }
-    ]);
+    const payload = {
+      titulo: newCourse.title,
+      descripcion: newCourse.summary,
+      imagen_url: newCourse.cover_image,
+      badge: newCourse.badge,
+      category: newCourse.category,
+      requisito_id: newCourse.requisito_id ? Number(newCourse.requisito_id) : null
+    };
+
+    const { error } = editingCourseId
+      ? await supabase.from("cursos").update(payload).eq("id", editingCourseId)
+      : await supabase.from("cursos").insert([{ ...payload, duracion: "1 hora" }]);
 
     if (error) {
-      toast.error("Error al crear curso: " + error.message);
+      toast.error(`Error al ${editingCourseId ? "guardar" : "crear"} curso: ` + error.message);
     } else {
-      setNewCourse({
-        title: "",
-        badge: "Básico",
-        summary: "",
-        cover_image: "",
-        category: "General"
-      });
+      toast.success(editingCourseId ? "Curso actualizado." : "Curso creado.");
+      cancelEditCourse();
       void fetchCourses();
     }
+  }
+
+  function handleEditCourse(course: any) {
+    setEditingCourseId(course.id);
+    setNewCourse({
+      title: course.titulo || course.title || "",
+      badge: course.badge || "Básico",
+      summary: course.descripcion || course.summary || "",
+      cover_image: course.imagen_url || course.cover_image || "",
+      category: course.category || "General",
+      requisito_id: course.requisito_id ? String(course.requisito_id) : ""
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditCourse() {
+    setEditingCourseId(null);
+    setNewCourse(EMPTY_COURSE);
   }
 
   async function handleDeleteCourse(id: number) {
@@ -169,6 +202,7 @@ export default function AdminCursosScreen() {
     if (error) toast.error("Error al eliminar curso: " + error.message);
     else {
       if (activeCourse?.id === id) setActiveCourse(null);
+      if (editingCourseId === id) cancelEditCourse();
       void fetchCourses();
     }
   }
@@ -434,11 +468,15 @@ export default function AdminCursosScreen() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900">Administrador de Cursos</h1>
-            <p className="text-xs text-gray-500">Crea cursos, módulos interactivos y múltiples evaluaciones</p>
+            <p className="text-xs text-gray-500">
+              {editingCourseId
+                ? `Editando: ${newCourse.title || "curso"}`
+                : "Crea cursos, módulos interactivos y múltiples evaluaciones"}
+            </p>
           </div>
         </div>
 
-        <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+        <form onSubmit={handleSaveCourse} className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
           <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Título del Curso</label>
@@ -477,11 +515,41 @@ export default function AdminCursosScreen() {
             </div>
 
             <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-gray-700 mb-1">Curso requisito</label>
+              <select
+                value={newCourse.requisito_id}
+                onChange={(e) => setNewCourse({ ...newCourse, requisito_id: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+              >
+                <option value="">Ninguno: se puede hacer en cualquier momento</option>
+                {courses
+                  .filter((c) => !editingCourseId || (c.id !== editingCourseId && !formaCiclo(courses, editingCourseId, c.id)))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Primero completar: {c.titulo || c.title}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Si eliges uno, este curso aparecerá con candado hasta que el estudiante termine el curso requisito.
+              </p>
+            </div>
+
+            <div className="sm:col-span-2 flex gap-2">
+              {editingCourseId && (
+                <button
+                  type="button"
+                  onClick={cancelEditCourse}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-all"
+                >
+                  Cancelar
+                </button>
+              )}
               <button
                 type="submit"
-                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md"
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md"
               >
-                <PlusCircle className="w-4 h-4" /> Crear Nuevo Curso
+                {editingCourseId ? <><Save className="w-4 h-4" /> Guardar Cambios</> : <><PlusCircle className="w-4 h-4" /> Crear Nuevo Curso</>}
               </button>
             </div>
           </div>
@@ -507,6 +575,7 @@ export default function AdminCursosScreen() {
             const courseTitle = course.titulo || course.title;
             const courseDesc = course.descripcion || course.summary;
             const courseCover = course.imagen_url || course.cover_image;
+            const requisito = course.requisito_id ? courses.find((c) => c.id === course.requisito_id) : null;
 
             return (
               <div key={course.id} className="bg-white rounded-3xl border border-gray-100 p-5 space-y-4 shadow-sm flex flex-col justify-between">
@@ -520,6 +589,11 @@ export default function AdminCursosScreen() {
                   </div>
                   <h3 className="font-extrabold text-gray-900 text-base leading-snug">{courseTitle}</h3>
                   <p className="text-xs text-gray-500 line-clamp-2">{courseDesc || "Sin resumen disponible."}</p>
+                  {requisito && (
+                    <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5" /> Requiere: {requisito.titulo || requisito.title}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
@@ -528,6 +602,13 @@ export default function AdminCursosScreen() {
                     className="flex-1 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Layers className="w-4 h-4" /> Módulos y Evaluaciones
+                  </button>
+                  <button
+                    onClick={() => handleEditCourse(course)}
+                    aria-label={`Editar curso ${courseTitle}`}
+                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition-all"
+                  >
+                    <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setDeleteCourseConfirm({ open: true, courseId: course.id })}

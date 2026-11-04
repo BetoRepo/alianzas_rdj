@@ -14,6 +14,7 @@ import {
   BookOpen
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { getCompletedCourses } from "../lib/courses";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { descargarCertificadoPDF, CERTIFICADO_FONDO_URL } from "../lib/certificado";
 import { toast } from "sonner";
@@ -69,6 +70,7 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requisitoPendiente, setRequisitoPendiente] = useState<{ id: number; titulo: string } | null>(null);
 
   // Progreso de módulos completados
   const [completedModules, setCompletedModules] = useState<number[]>([]);
@@ -111,6 +113,18 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
       ]);
 
       if (courseErr) throw new Error(`Curso no encontrado: ${courseErr.message}`);
+
+      // Curso con requisito sin terminar: no se carga el contenido (el admin sí puede verlo)
+      setRequisitoPendiente(null);
+      if (courseData.requisito_id && userProfile?.role !== "admin") {
+        const completados = userProfile?.id ? await getCompletedCourses(userProfile.id) : [];
+        if (!completados.some((c) => c.id === courseData.requisito_id)) {
+          const { data: req } = await supabase.from("cursos").select("id, titulo").eq("id", courseData.requisito_id).single();
+          setCourse({ id: courseData.id, titulo: courseData.titulo || "Curso", descripcion: courseData.descripcion || "", badge: courseData.badge || "", imagen_url: courseData.imagen_url || null });
+          setRequisitoPendiente({ id: courseData.requisito_id, titulo: req?.titulo || "el curso anterior" });
+          return;
+        }
+      }
 
       setCourse({
         id: courseData.id,
@@ -362,6 +376,31 @@ export default function CourseDetailScreen({ userProfile }: { userProfile?: any 
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
           <h2 className="text-base font-bold text-rose-900">No se pudo cargar el curso</h2>
           <p className="text-xs text-rose-700">{error || "Intenta recargar la página."}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (requisitoPendiente) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto space-y-4">
+        <button onClick={() => navigate("/catalogo")} className="flex items-center gap-2 text-xs font-bold text-gray-600">
+          <ArrowLeft className="w-4 h-4" /> Volver al Catálogo
+        </button>
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm text-center space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7" />
+          </div>
+          <h2 className="text-lg font-black text-gray-900">{course.titulo} está bloqueado</h2>
+          <p className="text-xs text-gray-500">
+            Para hacer este curso primero debes completar <span className="font-bold text-gray-800">{requisitoPendiente.titulo}</span>.
+          </p>
+          <button
+            onClick={() => navigate(`/curso/${requisitoPendiente.id}`)}
+            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-all inline-flex items-center gap-2"
+          >
+            Ir a {requisitoPendiente.titulo} <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     );

@@ -109,6 +109,12 @@ export async function getUserDashboardStats(userId: string) {
   };
 }
 
+// Devuelve el curso requisito que falta terminar, o null si el curso está disponible
+export function cursoBloqueado(course: any, courses: any[], completedIds: Set<number>, esAdmin = false) {
+  if (esAdmin || !course.requisito_id || completedIds.has(course.requisito_id)) return null;
+  return courses.find((c) => c.id === course.requisito_id) ?? null;
+}
+
 // Cursos con todos sus módulos regulares completados (la introducción no cuenta,
 // igual que para mostrar el certificado), con la fecha del último módulo terminado
 export async function getCompletedCourses(userId: string) {
