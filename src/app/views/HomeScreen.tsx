@@ -61,7 +61,7 @@ export default function HomeScreen({ userProfile }: { userProfile: any }) {
           </h2>
           <p className="text-[10px] text-gray-400 mt-1">Conoce más sobre nuestra plataforma de formación Scout</p>
         </div>
-        <div className="relative w-full max-w-2xl mx-auto aspect-video bg-gray-900 mx-5 mb-5 rounded-2xl overflow-hidden group">
+        <div className="relative w-full max-w-sm mx-auto aspect-[9/16] bg-gray-900 mb-5 rounded-2xl overflow-hidden group">
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
