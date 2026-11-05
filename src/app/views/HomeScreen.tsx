@@ -66,7 +66,6 @@ export default function HomeScreen({ userProfile }: { userProfile: any }) {
             ref={videoRef}
             className="w-full h-full object-cover"
             src="/videos/bienvenida.mp4"
-            muted
             playsInline
             preload="metadata"
             onPlay={() => setIsVideoPlaying(true)}
